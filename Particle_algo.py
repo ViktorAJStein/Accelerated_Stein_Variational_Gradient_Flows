@@ -13,9 +13,26 @@ from scipy.stats import gaussian_kde
 from tqdm import tqdm
 import os
 from PIL import Image
+import pingouin as pg
 
 # Set random seed for reproducibility
 np.random.seed(42)
+
+
+def sampling(n_samples, pdf):
+    # Define the support (bounding box) for sampling
+    x_min, x_max = -4, 4
+    y_min, y_max = -4, 4
+    # An estimate of the maximum value of the pdf in the region
+    max_pdf = 3
+    samples = []
+    while len(samples) < n_samples:
+        x = np.random.uniform(x_min, x_max)
+        y = np.random.uniform(y_min, y_max)
+        u = np.random.uniform(0, max_pdf)
+        if u < pdf(x, y):
+            samples.append((x, y))
+    return np.array(samples)
 
 
 def get_timestamp(file_name):
@@ -124,17 +141,30 @@ def plot_paths(Xs, folder_name):
     plt.show()
 
 
+def bimodal_density(x, y):
+    first = np.exp(-2*(np.sqrt(x**2 + y**2) - 3)**2)
+    second = np.exp(-2*(y-3)**2) + np.exp(-2*(y+3)**2)
+    return first * second
+
+
 def bimodal_grad(x):
     nx = np.linalg.norm(x)
     first = 4 * x * (1 - 3 / nx)
     second = np.array([
-        (8*np.exp(24*x[0]) * (x[0] - 3) + x[0] + 3) / (np.exp(24*x[0]) + 1),
+        8*(np.exp(24*x[0]) * (x[0] - 3) + x[0] + 3) / (np.exp(24*x[0]) + 1),
         0])
     return first + second
 
 
+def bimodal2_density(x, y):
+    first = np.exp(-2*(np.sqrt(x**2 + y**2) - 3)**2)
+    second = np.exp(-2*(x-3)**2) + np.exp(-2*(x+3)**2)
+    return first * second
+
+
 def gauss_mix_density(x, y, a1=1/2, a2=1/2):
-    return 1/(4*np.pi) * (np.exp(-1/2*(x-a1)**2 - 1/2*(y - a2)**2) + np.exp(-1/2*(x+a1)**2 - 1/2*(y + a2)**2))
+    first = np.exp(-1/2*(x-a1)**2 - 1/2*(y - a2)**2)
+    return 1/(4*np.pi) * (first + np.exp(-1/2*(x+a1)**2 - 1/2*(y + a2)**2))
 
 
 def gauss_mix_grad(x, a=np.array([1, 1])):
@@ -145,9 +175,10 @@ def gauss_mix_grad(x, a=np.array([1, 1])):
 def acc_Stein_Particle_Flow(
         plot=True,  # decide whether to plot the particles along the flow
         adaptive_restart=True,
+        verbose=False,
         eps=0,  # regularization parameter
-        N=500,  # number of particles
-        max_time=10,  # max time horizon
+        N=499,  # number of particles
+        max_time=100,  # max time horizon
         d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
         Q=np.array([[3, -2], [-2, 3]]),  # target covariance
@@ -156,30 +187,40 @@ def acc_Stein_Particle_Flow(
     init_cov = np.ones(d) @ np.ones(d) + np.eye(d)  # initial covariance
     nu = np.ones(d)  # target mean
     # X, _ = make_moons(N, noise=.1, random_state=42)  # initial particles
-
+    X = sampling(N, bimodal2_density)
     # uniform time step size
     tau = max_time / subdiv
-    X = np.random.multivariate_normal(init_mean, init_cov, size=N)
+    # X = np.random.multivariate_normal(init_mean, init_cov, size=N)
     # initial velocities
     Y = np.zeros((N, d))
     # inverse covariance matrix
     Q_inv = np.linalg.inv(Q)
     # target score
 
-    def target_score(x):
-        return Q_inv @ (x - nu)
+    # def target_score(x):
+    #     return Q_inv @ (x - nu)
 
-    target_type = 'Gaussian'
+    # target_type = 'Gaussian'
+    # target_mean = nu
+    # target_cov = Q
 
-    def target_density(x, y):
-        point = np.dstack((x, y))
-        return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
+    # def target_density(x, y):
+    #     point = np.dstack((x, y))
+    #     return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
 
-    # target_score = gauss_mix_grad
-    # target_density = gauss_mix_density
+    target_score = gauss_mix_grad
+    target_density = gauss_mix_density
+    target_type = 'non-Gaussian'
+    target_mean = np.zeros(2)
+    target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+
+    # target_score = bimodal_grad
+    # target_density = bimodal_density
     # target_type = 'non-Gaussian'
+    # target_mean = np.zeros(2)
+    # target_cov = np.array([[1.43, 0], [0, 9.125]])
     # kernel parameter matrix
-    A = 1/2 * Q_inv
+    A = np.eye(d)  # 1/2 * Q_inv
 
     # initialize quantities tracked along the flow
     means = np.zeros(subdiv)
@@ -190,7 +231,7 @@ def acc_Stein_Particle_Flow(
     folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
                    + f'Sigma_0={init_cov.flatten()},A={A.flatten()},eps={eps},'
                    + f'max_time={max_time},subdiv={subdiv},tau={tau},'
-                   + f'{target_type}_target'
+                   + f'{target_type}_target_restart={adaptive_restart}'
                    )
     make_folder(folder_name)
     # restart_counter is used to compute the acceleration parameter.
@@ -204,6 +245,9 @@ def acc_Stein_Particle_Flow(
         X_prev = X.copy()
         Xs[k, :, :] = X
         X += tau * Y
+        if not pg.multivariate_normality(X, alpha=0.05).normal:
+            if target_type == 'Gaussian':
+                print(f'Iter: {k}: Points are likely not Gaussian')
         # kernel matrix
         K = X @ A @ X.T + np.ones((N, N))
         try:
@@ -213,8 +257,8 @@ def acc_Stein_Particle_Flow(
         # plot particles
         empirical_mean = np.mean(X, axis=0)
         empirical_cov = np.cov(X, rowvar=False)
-        means[k] = np.linalg.norm(empirical_mean - nu)
-        covs[k] = np.linalg.norm(empirical_cov - Q)
+        means[k] = np.linalg.norm(empirical_mean - target_mean)
+        covs[k] = np.linalg.norm(empirical_cov - target_cov)
         if d == 1:
             empirical_cov = empirical_cov * np.eye(1)
         KLs[k] = KL(empirical_cov, Q, Q_inv, empirical_mean, nu)
@@ -227,10 +271,12 @@ def acc_Stein_Particle_Flow(
         # adaptive restart
         if adaptive_restart and k > 0:
             if target_type == 'Gaussian' and KLs[k] - KLs[k - 1] > 0:
-                print(f'No KL-descent at iteration {k}, restarting momentum')
+                if verbose:
+                    print(f'No KL-descent at iteration {k}, restarting momentum')
                 restart_counter = 1
             elif target_type != 'Gaussian' and norm_diff_current < norm_diff_prev:
-                print(f'No norm descent of iterates at iteration {k}, restarting momentum')
+                if verbose:
+                    print(f'No norm descent of iterates at iteration {k}, restarting momentum')
                 restart_counter = 1
             else:
                 restart_counter += 1
@@ -254,8 +300,9 @@ def acc_Stein_Particle_Flow(
     create_gif(folder_name, f'{folder_name}/{folder_name}.gif')
 
     # plotting quantities along the flow
-    # plt.plot(means, label='deviation from mean')
-    # plt.plot(covs, label='deviation from cov')
+    # if target_type == 'Gaussian':
+    plt.plot(means, label='deviation from mean')
+    plt.plot(covs, label='deviation from cov')
     plt.plot(KLs, label='KL between empirical cov matrix and target cov')
     plt.title(f'N ={N}, d = {2}, eps = {eps}, A = {A}, tau = {tau}')
     plt.legend()
