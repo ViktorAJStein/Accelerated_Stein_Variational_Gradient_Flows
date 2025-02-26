@@ -8,6 +8,7 @@ K(x, y) = x^T A y + 1 w.r.t. the KL divergence with Gaussian target
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_moons
+import scipy as sp
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
 import os
@@ -63,7 +64,7 @@ def KL(A, B, B_inv, mu, nu):
     return 0.5 * (first - d + second + third)
 
 
-def plot_particles(particles, label, folder_name):
+def plot_particles(particles, label, folder_name, target):
     # plt.figure(figsize=(8, 6))
     # plt.scatter(particles[:, 0], particles[:, 1],
     #             c='b', marker='o', edgecolors='k', alpha=.2)
@@ -92,6 +93,9 @@ def plot_particles(particles, label, folder_name):
     ax.set_xlim([xmin, xmax])
     ax.set_ylim([ymin, ymax])
     ax.set_aspect('equal', adjustable='box')
+    # plot contour lines of target density
+    T = target(X, Y)
+    plt.contour(X, Y, T, levels=8, colors='black', alpha=.2)
     plt.title(f'Iteration {label}')
     plt.grid('True')
     plt.savefig(f'{folder_name}/{folder_name}_{label}.png',
@@ -115,11 +119,32 @@ def plot_paths(Xs, folder_name):
               + folder_name + '\n'
               + ' Starting points are circles, endpoints are squares')
     plt.grid(True)
+    plt.savefig(f'{folder_name}/{folder_name}_paths.png',
+                dpi=300, bbox_inches='tight')
     plt.show()
+
+
+def bimodal_grad(x):
+    nx = np.linalg.norm(x)
+    first = 4 * x * (1 - 3 / nx)
+    second = np.array([
+        (8*np.exp(24*x[0]) * (x[0] - 3) + x[0] + 3) / (np.exp(24*x[0]) + 1),
+        0])
+    return first + second
+
+
+def gauss_mix_density(x, y, a1=1/2, a2=1/2):
+    return 1/(4*np.pi) * (np.exp(-1/2*(x-a1)**2 - 1/2*(y - a2)**2) + np.exp(-1/2*(x+a1)**2 - 1/2*(y + a2)**2))
+
+
+def gauss_mix_grad(x, a=np.array([1, 1])):
+    # gradient of the potential of N(a, Id) + N(-a, Id)
+    return x - a + 2 * a / (1 + np.exp(2 * np.dot(x, a)))
 
 
 def acc_Stein_Particle_Flow(
         plot=True,  # decide whether to plot the particles along the flow
+        adaptive_restart=True,
         eps=0,  # regularization parameter
         N=500,  # number of particles
         max_time=10,  # max time horizon
@@ -127,9 +152,9 @@ def acc_Stein_Particle_Flow(
         subdiv=1000,  # number of subdivisions of [0, max_time]
         Q=np.array([[3, -2], [-2, 3]]),  # target covariance
         ):
-    init_mean = np.ones(d)  # initial mean
+    init_mean = np.zeros(d)  # initial mean
     init_cov = np.ones(d) @ np.ones(d) + np.eye(d)  # initial covariance
-    nu = np.zeros(d)  # target mean
+    nu = np.ones(d)  # target mean
     # X, _ = make_moons(N, noise=.1, random_state=42)  # initial particles
 
     # uniform time step size
@@ -139,6 +164,20 @@ def acc_Stein_Particle_Flow(
     Y = np.zeros((N, d))
     # inverse covariance matrix
     Q_inv = np.linalg.inv(Q)
+    # target score
+
+    def target_score(x):
+        return Q_inv @ (x - nu)
+
+    target_type = 'Gaussian'
+
+    def target_density(x, y):
+        point = np.dstack((x, y))
+        return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
+
+    # target_score = gauss_mix_grad
+    # target_density = gauss_mix_density
+    # target_type = 'non-Gaussian'
     # kernel parameter matrix
     A = 1/2 * Q_inv
 
@@ -149,8 +188,9 @@ def acc_Stein_Particle_Flow(
 
     # print initial data
     folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
-                   + f'Sigma_0={init_cov.flatten()},A={A.flatten()},eps={eps}'
-                   + f'max_time={max_time},subdiv={subdiv},tau={tau}'
+                   + f'Sigma_0={init_cov.flatten()},A={A.flatten()},eps={eps},'
+                   + f'max_time={max_time},subdiv={subdiv},tau={tau},'
+                   + f'{target_type}_target'
                    )
     make_folder(folder_name)
     # restart_counter is used to compute the acceleration parameter.
@@ -158,7 +198,10 @@ def acc_Stein_Particle_Flow(
     restart_counter = 1
 
     Xs = np.zeros((subdiv, N, d))
+    X_prev = X.copy()
     for k in tqdm(range(subdiv)):
+        X_old = X_prev.copy()
+        X_prev = X.copy()
         Xs[k, :, :] = X
         X += tau * Y
         # kernel matrix
@@ -175,20 +218,30 @@ def acc_Stein_Particle_Flow(
         if d == 1:
             empirical_cov = empirical_cov * np.eye(1)
         KLs[k] = KL(empirical_cov, Q, Q_inv, empirical_mean, nu)
+        # two quantities for adaptive restart
+        norm_diff_current = np.linalg.norm(X - X_prev)  # ||x_{k+1} - x_k||
+        norm_diff_prev = np.linalg.norm(X_prev - X_old)  # ||x_k - x_{k-1}||
+
         if d == 2 and plot and not k % 20:
-            plot_particles(X, k, folder_name)
+            plot_particles(X, k, folder_name, target_density)
         # adaptive restart
-        # alternative: if || x_{k + 1} - x_k || < || x_k - x_{k - 1} ||
-        if KLs[k] - KLs[k - 1] > 0 and k > 0:
-            print(f'No KL-descent at iteration {k}, restarting momentum')
-            restart_counter = 1
+        if adaptive_restart and k > 0:
+            if target_type == 'Gaussian' and KLs[k] - KLs[k - 1] > 0:
+                print(f'No KL-descent at iteration {k}, restarting momentum')
+                restart_counter = 1
+            elif target_type != 'Gaussian' and norm_diff_current < norm_diff_prev:
+                print(f'No norm descent of iterates at iteration {k}, restarting momentum')
+                restart_counter = 1
+            else:
+                restart_counter += 1
+            # acceleration parameter
+            alpha_k = (restart_counter - 1) / (restart_counter + 2)
         else:
-            restart_counter += 1
-        # acceleration parameter
-        alpha_k = (restart_counter - 1) / (restart_counter + 2)
+            alpha_k = (k - 1) / (k + 2)
         # update velocities
-        Y = (1 - tau*alpha_k) * Y + tau * (X @ A - K @ (X - nu) @ Q_inv / N)
-        Y += tau / (N * N) * np.trace(V @ V.T @ K) * X @ A
+        Y = (1 - tau*alpha_k) * Y
+        Y += tau * (X @ A - K @ np.apply_along_axis(target_score, 1, X) / N)
+        Y += tau / (N * N) * np.trace(V.T @ K @ V) * X @ A
 
         # early stopping for efficiency
         if KLs[k] < 1e-7:
@@ -201,12 +254,14 @@ def acc_Stein_Particle_Flow(
     create_gif(folder_name, f'{folder_name}/{folder_name}.gif')
 
     # plotting quantities along the flow
-    plt.plot(means, label='deviation from mean')
-    plt.plot(covs, label='deviation from cov')
-    plt.plot(KLs, label='functional value')
+    # plt.plot(means, label='deviation from mean')
+    # plt.plot(covs, label='deviation from cov')
+    plt.plot(KLs, label='KL between empirical cov matrix and target cov')
     plt.title(f'N ={N}, d = {2}, eps = {eps}, A = {A}, tau = {tau}')
     plt.legend()
     plt.yscale('log')
+    plt.savefig(f'{folder_name}/{folder_name}_loss.png',
+                dpi=300, bbox_inches='tight')
     plt.show()
 
     plot_paths(Xs, folder_name)
