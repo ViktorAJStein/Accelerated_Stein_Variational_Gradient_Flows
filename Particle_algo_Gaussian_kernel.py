@@ -99,7 +99,7 @@ def plot_particles(particles, label, folder_name, target, KDE=False):
             Z = np.reshape(kernel(positions).T, X.shape)
             ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,
                       extent=[xmin, xmax, ymin, ymax])
-        except:
+        except Exception:
             pass
     ax.plot(m1, m2, 'k.', markersize=2)
     ax.set_xlim([xmin, xmax])
@@ -107,7 +107,7 @@ def plot_particles(particles, label, folder_name, target, KDE=False):
     ax.set_aspect('equal', adjustable='box')
     # plot contour lines of target density
     T = target(X, Y)
-    plt.contour(X, Y, T, levels=8, colors='black', alpha=.2)
+    plt.contour(X, Y, T, levels=5, colors='black', alpha=.2)
     plt.title(f'Iteration {label}')
     plt.grid('True')
     plt.savefig(f'{folder_name}/{folder_name}_{label}.png',
@@ -134,6 +134,68 @@ def plot_paths(Xs, folder_name):
     plt.savefig(f'{folder_name}/{folder_name}_paths.png',
                 dpi=300, bbox_inches='tight')
     plt.show()
+
+
+def U2_density(x, y):
+    return np.exp(- 25/8 * (y - np.sin(np.pi/2*x))**2)
+
+
+def U2_grad(x):
+    factor = U2_density(x[0], x[1]) * (x[1] - np.sin(np.pi / 2 * x[0]))
+    return - factor * np.array([25/8 * np.pi * np.cos(np.pi / 2 * x[0]), -25/4])
+
+
+def U3_density(x, y):
+    first = np.exp(-1/2*((y - np.sin(np.pi / 2 * x))/(.35))**2)
+    w2 = 3*np.exp(-1/2*((x-1)/(.6))**2)
+    second = np.exp(-1/2*((y - np.sin(np.pi / 2 * x) + w2)/(.35))**2)
+    return first + second
+
+
+def U3_grad(x):
+    term1 = np.exp(-200/49 * (x[1] - np.sin((np.pi * x[0]) / 2))**2)
+    term2 = np.exp(-25/18 * (x[0] - 1)**2)
+    term3 = np.exp(-200/49 * (3 * term2 - np.sin((np.pi * x[0]) / 2) + x[1])**2)
+    A = 200 * np.pi * np.cos((np.pi * x[0]) / 2) * term1 * (x[1] - np.sin((np.pi * x[0]) / 2))
+    B = -25/3 * term2 * (x[0] - 1) - 0.5 * np.pi * np.cos((np.pi * x[0]) / 2)
+    C = 3 * term2 - np.sin((np.pi * x[0]) / 2) + x[1]
+    num1 = -(A - 2 * B * C * term3)
+    den1 = 49 * (term3 + term1)
+    first_expr = num1 / den1
+    num2 = (-400/49 * C * term3 - 400/49 * term1 * (x[1] - np.sin((np.pi * x[0]) / 2)))
+    den2 = term3 + term1
+    second_expr = - (num2 / den2)
+    return np.array([first_expr, second_expr])
+
+
+def U4_density(x, y):
+    first = np.exp(-1/2*((y - np.sin(np.pi / 2 * x))/(.4))**2)
+    w3 = 3/(1 + np.exp(10/3*(1-x)))
+    second = np.exp(-1/2*((y - np.sin(np.pi / 2 * x) + w3)/(.35))**2)
+    return first + second
+
+
+def U4_grad(x):
+    exp_a = np.exp(-25/8 * (x[1] - np.sin((np.pi * x[0]) / 2))**2)
+    exp_b = np.exp((10 * (1 - x[0])) / 3)
+    common_expr = 3/(exp_b + 1) - np.sin((np.pi * x[0]) / 2) + x[1]
+    exp_c = np.exp(-200/49 * common_expr**2)
+    denom = exp_c + exp_a
+    num1 = -(
+        (25/8) * np.pi * np.cos((np.pi * x[0]) / 2) * exp_a * (x[1] - np.sin((np.pi * x[0]) / 2))
+        - (400/49) * (
+            (10 * exp_b) / ((exp_b + 1)**2) - 0.5 * np.pi * np.cos((np.pi * x[0]) / 2)
+        ) * (
+            3/(exp_b + 1) - np.sin((np.pi * x[0]) / 2) + x[1]
+        ) * exp_c
+    )
+    first_component = num1 / denom
+    num2 = -(
+         - (400/49) * common_expr * exp_c
+         - (25/4) * exp_a * (x[1] - np.sin((np.pi * x[0]) / 2))
+    )
+    second_component = num2 / denom
+    return np.array([first_component, second_component])
 
 
 def bimodal_density(x, y):
@@ -171,9 +233,9 @@ def acc_Stein_Particle_Flow(
         plot=True,  # decide whether to plot the particles along the flow
         adaptive_restart=True,
         verbose=True,
-        eps=0.01,  # regularization parameter
-        N=1000,  # number of particles
-        max_time=100,  # max time horizon
+        eps=.01,  # regularization parameter
+        N=500,  # number of particles
+        max_time=200,  # max time horizon
         d=2,  # dimension of the particles
         subdiv=200,  # number of subdivisions of [0, max_time]
         Q=np.array([[3, -2], [-2, 3]]),  # target covariance
@@ -192,12 +254,11 @@ def acc_Stein_Particle_Flow(
     Y = np.zeros((N, d))
     # inverse covariance matrix
     Q_inv = np.linalg.inv(Q)
-    # target score
 
     # def target_score(x):
     #     return Q_inv @ (x - nu)
 
-    # target_type = 'bananas'
+    # target_type = 'Gaussian'
     # target_mean = nu
     # target_cov = Q
 
@@ -211,11 +272,29 @@ def acc_Stein_Particle_Flow(
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
 
-    target_score = bimodal_grad
-    target_density = bimodal_density
-    target_type = 'non-Gaussian'
+    # target_score = U2_grad
+    # target_density = U2_density
+    # target_type = 'squiggly'
+    # target_mean = np.zeros(2)
+    # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+
+    # target_score = U3_grad
+    # target_density = U3_density
+    # target_type = 'squiggly2'
+    # target_mean = np.zeros(2)
+    # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+
+    target_score = U4_grad
+    target_density = U4_density
+    target_type = 'squiggly3'
     target_mean = np.zeros(2)
-    target_cov = np.array([[1.43, 0], [0, 9.125]])
+    target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+
+    # target_score = bimodal_grad
+    # target_density = bimodal_density
+    # target_type = 'non-Gaussian'
+    # target_mean = np.zeros(2)
+    # target_cov = np.array([[1.43, 0], [0, 9.125]])
     # Gaussian kernel parameter
     sigma = .1
 
@@ -228,7 +307,7 @@ def acc_Stein_Particle_Flow(
     folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
                    + f'Sigma_0={init_cov.flatten()},eps={eps},'
                    + f'max_time={max_time},subdiv={subdiv},tau={tau},'
-                   + f'{target_type}_target_restart={adaptive_restart}'
+                   + f'{target_type}_target_restart={adaptive_restart},'
                    + f'sigma={sigma},prior={prior_name}'
                    )
     make_folder(folder_name)
@@ -238,6 +317,7 @@ def acc_Stein_Particle_Flow(
 
     Xs = np.zeros((subdiv, N, d))
     X_prev = X.copy()
+    L = []
     for k in tqdm(range(subdiv)):
         X_old = X_prev.copy()
         X_prev = X.copy()
@@ -251,17 +331,19 @@ def acc_Stein_Particle_Flow(
         D2 = sq_norms[:, None] + sq_norms[None, :] - 2 * np.dot(X, X.T)
         K = np.exp(-D2 / (2 * sigma**2))
         try:
-            V = N * np.linalg.pinv(K + N*eps*np.eye(N)) @ Y
-        except:
+            V = np.linalg.pinv(K + N*eps*np.eye(N)) @ Y
+        except Exception:
             break
         # plot particles
-        empirical_mean = np.mean(X, axis=0)
-        empirical_cov = np.cov(X, rowvar=False)
-        means[k] = np.linalg.norm(empirical_mean - target_mean)
-        covs[k] = np.linalg.norm(empirical_cov - target_cov)
+        if d == 2:
+            empirical_mean = np.mean(X, axis=0)
+            empirical_cov = np.cov(X, rowvar=False)
+            means[k] = np.linalg.norm(empirical_mean - target_mean)
+            covs[k] = np.linalg.norm(empirical_cov - target_cov)
         if d == 1:
             empirical_cov = empirical_cov * np.eye(1)
-        KLs[k] = KL(empirical_cov, Q, Q_inv, empirical_mean, nu)
+        if d <= 2:
+            KLs[k] = KL(empirical_cov, Q, Q_inv, empirical_mean, nu)
         # two quantities for adaptive restart
         norm_diff_current = np.linalg.norm(X - X_prev)  # ||x_{k+1} - x_k||
         norm_diff_prev = np.linalg.norm(X_prev - X_old)  # ||x_k - x_{k-1}||
@@ -286,15 +368,18 @@ def acc_Stein_Particle_Flow(
             alpha_k = (k - 1) / (k + 2)
         # update velocities
         Y = (1 - tau*alpha_k) * Y
-        Y += tau / (N * 2 * sigma**2) * ((np.diag(K.sum(axis=1)) - K) @ X - 2*sigma**2 * K @ np.apply_along_axis(target_score, 1, X))
-        W = K @ np.multiply(K, V @ V.T) - np.multiply(K @ V @ V.T, K)
-        Y += tau / (N * N * 2 * sigma**2) * (np.diag(W.sum(axis=1)) - W) @ X
+        W = K + N * (K @ np.multiply(K, V@V.T) - np.multiply(K@V@V.T, K))
+        W_laplacian = np.diag(W.sum(axis=1)) - W
+        Y += tau / (N * 2 * sigma**2) * (W_laplacian @ X - 2*sigma**2 * K @ np.apply_along_axis(target_score, 1, X))
+        L.append(np.linalg.norm(W - np.eye(N)))
 
         # early stopping for efficiency
         if KLs[k] < 1e-7:
             print('Functional values is below 1e-7, stopping iteration.')
             break
-
+    plt.plot(L, label='\| W - Id \|')
+    plt.legend()
+    plt.show()
     print('Final empirical mean and covariance matrix:'
           + f' {empirical_mean}, {empirical_cov}')
 
