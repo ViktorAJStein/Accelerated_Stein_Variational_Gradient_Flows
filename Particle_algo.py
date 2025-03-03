@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Particle algorithm to approximate Stein gradient flow with bilinear kernel
-K(x, y) = x^T A y + 1 w.r.t. the KL divergence with Gaussian target
+K(x, y) = x^T A y + 1 w.r.t. the KL divergence
 
 @author: Viktor Stein
 """
@@ -81,7 +81,7 @@ def KL(A, B, B_inv, mu, nu):
     return 0.5 * (first - d + second + third)
 
 
-def plot_particles(particles, label, folder_name, target):
+def plot_particles(particles, label, folder_name, target, c):
     # plt.figure(figsize=(8, 6))
     # plt.scatter(particles[:, 0], particles[:, 1],
     #             c='b', marker='o', edgecolors='k', alpha=.2)
@@ -106,7 +106,7 @@ def plot_particles(particles, label, folder_name, target):
     ax = plt.gca()
     ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,
               extent=[xmin, xmax, ymin, ymax])
-    ax.plot(m1, m2, 'k.', markersize=2)
+    ax.plot(m1, m2, '.', markersize=2, color=c)
     ax.set_xlim([xmin, xmax])
     ax.set_ylim([ymin, ymax])
     ax.set_aspect('equal', adjustable='box')
@@ -139,6 +139,19 @@ def plot_paths(Xs, folder_name):
     plt.savefig(f'{folder_name}/{folder_name}_paths.png',
                 dpi=300, bbox_inches='tight')
     plt.show()
+
+
+def U2_density(x, y):
+    return np.exp(- 25/8 * (y - np.sin(np.pi/2*x)))
+
+
+def U2_grad(x):
+    return np.array([25/8 * np.pi * np.cos(np.pi / 2 * x[0])
+                     * U2_density(x[0], x[1])
+                     * (x[1] - np.sin(np.pi / 2 * x[0]),
+                         -25/4 * U2_density(x[0], x[1])
+                         * (x[1] - np.sin(np.pi/2*x[0])))
+                     ])
 
 
 def bimodal_density(x, y):
@@ -187,10 +200,10 @@ def acc_Stein_Particle_Flow(
     init_cov = np.ones(d) @ np.ones(d) + np.eye(d)  # initial covariance
     nu = np.ones(d)  # target mean
     # X, _ = make_moons(N, noise=.1, random_state=42)  # initial particles
-    X = sampling(N, bimodal2_density)
+    # X = sampling(N, bimodal2_density)
     # uniform time step size
     tau = max_time / subdiv
-    # X = np.random.multivariate_normal(init_mean, init_cov, size=N)
+    X = np.random.multivariate_normal(init_mean, init_cov, size=N)
     # initial velocities
     Y = np.zeros((N, d))
     # inverse covariance matrix
@@ -208,6 +221,8 @@ def acc_Stein_Particle_Flow(
     #     point = np.dstack((x, y))
     #     return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
 
+    # TODO: this is how it should look!
+    # target_score, target_density, target_type, target_mean, target_cov = targets(gauss_mix)
     target_score = gauss_mix_grad
     target_density = gauss_mix_density
     target_type = 'non-Gaussian'
@@ -219,6 +234,7 @@ def acc_Stein_Particle_Flow(
     # target_type = 'non-Gaussian'
     # target_mean = np.zeros(2)
     # target_cov = np.array([[1.43, 0], [0, 9.125]])
+
     # kernel parameter matrix
     A = np.eye(d)  # 1/2 * Q_inv
 
@@ -231,7 +247,7 @@ def acc_Stein_Particle_Flow(
     folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
                    + f'Sigma_0={init_cov.flatten()},A={A.flatten()},eps={eps},'
                    + f'max_time={max_time},subdiv={subdiv},tau={tau},'
-                   + f'{target_type}_target_restart={adaptive_restart}'
+                   + f'{target_type},target_restart={adaptive_restart}'
                    )
     make_folder(folder_name)
     # restart_counter is used to compute the acceleration parameter.
@@ -239,12 +255,20 @@ def acc_Stein_Particle_Flow(
     restart_counter = 1
 
     Xs = np.zeros((subdiv, N, d))
+    Xs_non = np.zeros((subdiv, N, d))
     X_prev = X.copy()
+    X_non = X.copy()
     for k in tqdm(range(subdiv)):
         X_old = X_prev.copy()
         X_prev = X.copy()
         Xs[k, :, :] = X
         X += tau * Y
+        
+        # non-accelerated
+        score_non = np.apply_along_axis(target_score, 1, X_non)
+        K_non = X_non @ A @ X_non.T + np.ones((N, N))
+        X += tau / N * (K_non @ score_non + N * X_non @ A)
+        # 
         if not pg.multivariate_normality(X, alpha=0.05).normal:
             if target_type == 'Gaussian':
                 print(f'Iter: {k}: Points are likely not Gaussian')
@@ -267,7 +291,8 @@ def acc_Stein_Particle_Flow(
         norm_diff_prev = np.linalg.norm(X_prev - X_old)  # ||x_k - x_{k-1}||
 
         if d == 2 and plot and not k % 20:
-            plot_particles(X, k, folder_name, target_density)
+            plot_particles(X, k, folder_name, target_density, 'k')
+            plot_particles(X_non, k, folder_name, target_density, 'b')
         # adaptive restart
         if adaptive_restart and k > 0:
             if target_type == 'Gaussian' and KLs[k] - KLs[k - 1] > 0:
