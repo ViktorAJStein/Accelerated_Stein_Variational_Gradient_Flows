@@ -43,7 +43,7 @@ def create_gif(image_folder, output_gif):
     images = []
     try:
         for filename in sorted(os.listdir(image_folder), key=get_timestamp):
-            if filename.endswith(".png"):
+            if filename.endswith(".svg"):
                 img = Image.open(os.path.join(image_folder, filename))
                 images.append(img)
 
@@ -115,7 +115,7 @@ def plot_particles(particles, label, folder_name, target, c):
     plt.contour(X, Y, T, levels=8, colors='black', alpha=.2)
     plt.title(f'Iteration {label}')
     plt.grid('True')
-    plt.savefig(f'{folder_name}/{folder_name}_{label}.png',
+    plt.savefig(f'{folder_name}/{folder_name}_{label}.svg',
                 dpi=300, bbox_inches='tight')
     plt.show()
 
@@ -136,7 +136,7 @@ def plot_paths(Xs, folder_name):
               + folder_name + '\n'
               + ' Starting points are circles, endpoints are squares')
     plt.grid(True)
-    plt.savefig(f'{folder_name}/{folder_name}_paths.png',
+    plt.savefig(f'{folder_name}/{folder_name}_paths.svg',
                 dpi=300, bbox_inches='tight')
     plt.show()
 
@@ -332,7 +332,7 @@ def acc_Stein_Particle_Flow(
     plt.title(f'N ={N}, d = {2}, eps = {eps}, A = {A}, tau = {tau}')
     plt.legend()
     plt.yscale('log')
-    plt.savefig(f'{folder_name}/{folder_name}_loss.png',
+    plt.savefig(f'{folder_name}/{folder_name}_loss.svg',
                 dpi=300, bbox_inches='tight')
     plt.show()
 

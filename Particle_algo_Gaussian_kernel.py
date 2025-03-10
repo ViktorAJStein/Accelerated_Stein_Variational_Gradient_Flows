@@ -10,68 +10,16 @@ import matplotlib.pyplot as plt
 # from sklearn.datasets import make_moons
 import scipy as sp
 from targets import *
-from scipy.stats import gaussian_kde
+from adds import *
+from plotting import *
 from tqdm import tqdm
-import os
-from PIL import Image
 import pingouin as pg
 
 # Set random seed for reproducibility
 np.random.seed(42)
 
 
-def sampling(n_samples, pdf):
-    # Define the support (bounding box) for sampling
-    x_min, x_max = -4, 4
-    y_min, y_max = -4, 4
-    # An estimate of the maximum value of the pdf in the region
-    max_pdf = 3
-    samples = []
-    while len(samples) < n_samples:
-        x = np.random.uniform(x_min, x_max)
-        y = np.random.uniform(y_min, y_max)
-        u = np.random.uniform(0, max_pdf)
-        if u < pdf(x, y):
-            samples.append((x, y))
-    return np.array(samples)
-
-
-def get_timestamp(file_name):
-    return int(file_name.split('_')[-1].split('.')[0])
-
-
-def create_gif(image_folder, output_gif):
-    images = []
-    try:
-        for filename in sorted(os.listdir(image_folder), key=get_timestamp):
-            if filename.endswith(".png"):
-                img = Image.open(os.path.join(image_folder, filename))
-                images.append(img)
-
-        if images:
-            images[0].save(
-                output_gif,
-                save_all=True,
-                append_images=images[1:],
-                duration=np.floor(10000/len(images)),  # in milliseconds
-                loop=0  # numbero f loops, 0 means infinite loop,
-            )
-    finally:
-        for img in images:
-            img.close()
-    print('Gif created successfully!')
-
-
-def make_folder(name):
-    try:
-        os.mkdir(name)
-        print(f"Folder '{name}' created successfully.")
-    except FileExistsError:
-        print(f"Folder '{name}' already exists.")
-    except Exception as e:
-        print(f"An error occurred: {e}.")
-
-
+# KL divergence of N(mu, A) to N(nu, B)
 def KL(A, B, B_inv, mu, nu):
     _, logdet_A = np.linalg.slogdet(A)
     _, logdet_B = np.linalg.slogdet(B)
@@ -82,77 +30,17 @@ def KL(A, B, B_inv, mu, nu):
     return 0.5 * (first - d + second + third)
 
 
-def plot_particles(particles, velocities, label, folder_name, target, c, acc, arrows, KDE=False):
-    m1, m2 = particles[:, 0], particles[:, 1]
-    xmin = -8  # m1.min() - 1.0
-    xmax = 8  # m1.max() + 1.0
-    ymin = -8  # m2.min() - 1.0
-    ymax = 8  # m2.max() + 1.0
-    # Perform a kernel density estimate on the data:
-    X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-    fig, ax = plt.subplots()
-    ax = plt.gca()
-    if KDE:
-        try:
-            positions = np.vstack([X.ravel(), Y.ravel()])
-            values = np.vstack([m1, m2])
-            kernel = gaussian_kde(values)
-            Z = np.reshape(kernel(positions).T, X.shape)
-            ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,
-                      extent=[xmin, xmax, ymin, ymax])
-        except Exception:
-            pass
-    if arrows and velocities is not None:
-        plt.quiver(m1, m2, velocities[:, 0], velocities[:, 1],
-                   angles='xy', scale_units='xy', scale=.01, alpha=.2)
-    ax.plot(m1, m2, '.', markersize=2, color=c)
-    ax.set_xlim([xmin, xmax])
-    ax.set_ylim([ymin, ymax])
-    ax.set_aspect('equal', adjustable='box')
-    # plot contour lines of target density
-    T = target(X, Y)
-    plt.contour(X, Y, T, levels=5, colors='black', alpha=.2)
-    plt.title(f'Iteration {label}')
-    plt.grid('True')
-    plt.savefig(f'{folder_name}/{acc}/{folder_name}_{label}.png',
-                dpi=300, bbox_inches='tight')
-    plt.show()
-
-
-def plot_paths(Xs, folder_name, add=''):
-    N = Xs.shape[1]
-    cmap = plt.get_cmap('viridis')
-    colors = [cmap(i) for i in np.linspace(0, 1, N)]
-    plt.figure(figsize=(10, 8))
-    for i in range(N):
-        # Plot the trajectory with transparency (alpha).
-        plt.plot(Xs[:, i, 0], Xs[:, i, 1], c=colors[i], alpha=0.2)
-        # Mark the starting point with a circle marker.
-        plt.plot(Xs[0, i, 0], Xs[0, i, 1], marker='o', c=colors[i], ms=5)
-        # Mark the endpoint with a square marker.
-        plt.plot(Xs[-1, i, 0], Xs[-1, i, 1], marker='s', c=colors[i], ms=5)
-    plt.title(f'Particle Trajectories {add} \n'
-              + folder_name + '\n'
-              + ' Starting points are circles, endpoints are squares')
-    plt.grid(True)
-    plt.xlim([-8, 8])
-    plt.ylim([-5, 5])
-    plt.savefig(f'{folder_name}/{folder_name}_{add}_paths.png',
-                dpi=300, bbox_inches='tight')
-    plt.show()
-
-
 def acc_Stein_Particle_Flow(
         plot=True,  # decide whether to plot the particles along the flow
-        adaptive_restart=False,
+        adaptive_restart=True,
         verbose=True,
         arrows=True,
         eps=0.01,  # regularization parameter
         N=250,  # number of particles
         max_time=100,  # max time horizon
-        d=5,  # dimension of the particles
+        d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
-        sigma=1  # Gaussian kernel parameter
+        sigma=.1  # Gaussian kernel parameter
         ):
     tau = max_time / subdiv
     Y = np.zeros((N, d))  # initial velocities
@@ -169,20 +57,20 @@ def acc_Stein_Particle_Flow(
     prior_name = 'Gaussian'
 
     # target
-    nu = np.ones(d)  # target mean
-    Q = np.eye(d) * 5  # target covariance
-    Q_inv = np.linalg.inv(Q)  # inverse target covariance matrix
+    # nu = np.ones(d)  # target mean
+    # Q = np.eye(d) * 5  # target covariance
+    # Q_inv = np.linalg.inv(Q)  # inverse target covariance matrix
 
-    def target_score(x):
-        return Q_inv @ (x - nu)
+    # def target_score(x):
+    #     return Q_inv @ (x - nu)
 
-    target_type = 'Gaussian'
-    target_mean = nu
-    target_cov = Q
+    # target_type = 'Gaussian'
+    # target_mean = nu
+    # target_cov = Q
 
-    def target_density(x, y):
-        point = np.dstack((x, y))
-        return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
+    # def target_density(x, y):
+    #     point = np.dstack((x, y))
+    #     return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
 
     # target_score = gauss_mix_grad
     # target_density = gauss_mix_density
@@ -196,11 +84,11 @@ def acc_Stein_Particle_Flow(
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
 
-    # target_score = U3_grad
-    # target_density = U3_density
-    # target_type = 'squiggly2'
-    # target_mean = np.zeros(2)
-    # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+    target_score = U3_grad
+    target_density = U3_density
+    target_type = 'squiggly2'
+    target_mean = np.zeros(2)
+    target_cov = np.eye(2) + 1/4*np.ones((2, 2))
 
     # target_score = U4_grad
     # target_density = U4_density
@@ -233,18 +121,52 @@ def acc_Stein_Particle_Flow(
                        + f'{target_type}_target_restart={adaptive_restart},'
                        + f'sigma={sigma},prior={prior_name}'
                        )
+
     make_folder(folder_name)
-    make_folder(folder_name+'/accelerated')
-    make_folder(folder_name+'/non-accelerated')
+    methods = ['accelerated', 'non-accelerated', 'overdamped',
+               'underdamped', 'MALA']
+    for m in methods:
+        make_folder(folder_name+f'/{m}')
     # restart_counter is used to compute the acceleration parameter.
     # It will be reset to 1 when a restart is triggered.
     restart_counter = 1
 
     # non-accelerated particles
     X_non = X.copy()
+    # Overdamped Langevin dynamics
+    X_over = X.copy()
+    X_MALA = X.copy()
+    # Underdamped Langevin dynamics
+    X_under = X.copy()
+    Y_under = Y.copy()
+    # parameter for Langevin dynamics
+    gamma = 1  # friction coefficient for Langevin dynamics
+    temp = 1  # temperature * Boltzmann's constant
+    m = 1  # mass of the particles
+    sigma_0 = np.sqrt(2 * temp * tau / gamma)  # variance for the noise
+    U = lambda x: -np.log(target_density(x[0], x[1]))
 
+    def q_density(y, x, sigma2):
+        """
+        Proposal density q(y|x) for MALA, which is Gaussian with mean
+        x - (dt/gamma) * grad_U(x) and variance sigma2.
+        y and x are arrays of shape (N, d).
+        Returns: density evaluated for each particle (shape (N,))
+        """
+        d = x.shape[1]
+        # Mean of the proposal
+        mean = x - (tau/gamma) * np.apply_along_axis(target_score, 1, x)
+        diff = y - mean
+        norm_sq = np.sum(diff**2, axis=-1)
+        coeff = 1.0 / ((2 * np.pi * sigma2)**(d/2))
+        return coeff * np.exp(- norm_sq / (2 * sigma2))
+
+    # history
     Xs = np.zeros((subdiv, N, d))
     Xs_non = np.zeros((subdiv, N, d))
+    Xs_over = np.zeros((subdiv, N, d))
+    Xs_under = np.zeros((subdiv, N, d))
+    Xs_MALA = np.zeros((subdiv, N, d))
     X_prev = X.copy()
     L = []
     for k in tqdm(range(subdiv)):
@@ -253,10 +175,52 @@ def acc_Stein_Particle_Flow(
                            'accelerated', arrows)
             plot_particles(X_non, None, f'non_acc_{k}', folder_name,
                            target_density, 'b', 'non-accelerated', arrows)
-
+            plot_particles(X_over, None, f'Overdamped_{k}', folder_name,
+                           target_density, 'b', 'overdamped', arrows)
+            plot_particles(X_under, Y_under, f'Underdamped_{k}', folder_name,
+                           target_density, 'b', 'underdamped', arrows)
+            plot_particles(X_MALA, None, f'MALA_{k}', folder_name,
+                           target_density, 'b', 'MALA', arrows)
+        # save previous iters and concatenate history
         X_old = X_prev.copy()
         X_prev = X.copy()
         Xs[k, :, :] = X
+        # overdamped Langevin update (ULA) using Euler-Mayurama discretization
+        X_over -= tau / gamma * np.apply_along_axis(target_score, 1, X_over)
+        X_over += sigma_0 * np.random.rand(N, d)
+        Xs_over[k, :, :] = X_over
+        # underdamped Langevin update using Euler-Mayurama discretization
+        X_under += tau * Y_under
+        Y_under = (1 - gamma / m * tau)*Y_under
+        Y_under -= tau / m * np.apply_along_axis(target_score, 1, X_under)
+        Y_under += sigma_0 * np.random.rand(N, d)
+        Xs_under[k, :, :] = X_under
+        # MALA
+        grad_current = np.apply_along_axis(target_score, 1, X_MALA)  # (N, d)
+        # Generate proposal using Euler-Maruyama step:
+        proposal_mean = X_MALA - tau/gamma * grad_current
+        proposal = proposal_mean + sigma_0 * np.random.randn()  # shape = (N, d)
+        # Compute the ratio of target densities:
+        # π(x) ∝ exp(-U(x)), so the ratio is exp(-U(proposal) + U(current))
+        up = np.array([target_density(row[0], row[1]) for row in proposal])
+        down = np.array([target_density(row[0], row[1]) for row in X_MALA])
+        target_ratio = up / down  # (N, )
+        # Compute the proposal density ratio:
+        # q(current|proposal) / q(proposal|current)
+        q_forward = q_density(proposal, X_MALA, sigma_0)  # shape = (N, )
+        q_backward = q_density(X_MALA, proposal, sigma_0)  # shape = (N, )
+        proposal_ratio = q_backward / q_forward  # shape = (N, )
+        # Acceptance probability for each particle
+        alpha = np.minimum(1, target_ratio * proposal_ratio)
+        # Accept or reject proposals
+        u = np.random.rand(N)  # one uniform random number per particle
+        accept = u < alpha  # boolean array, shape (N,)
+        # Update: if accepted, move to proposal; otherwise, stay at current
+        new_x = np.copy(X_MALA)
+        new_x[accept] = proposal[accept]
+        X_MALA = new_x
+        Xs_MALA[k, :, :] = X_MALA
+        # accelerated SVGD update positions
         X += tau * Y
         if not pg.multivariate_normality(X, alpha=0.05).normal:
             if target_type == 'Gaussian':
@@ -333,25 +297,25 @@ def acc_Stein_Particle_Flow(
         plot_particles(X_non, None, f'non_acc_{k}', folder_name, target_density,
                        'b', 'non-accelerated', arrows)
 
-    create_gif(folder_name+'/accelerated',
-               f'{folder_name}/{folder_name}_acc.gif')
-    create_gif(folder_name+'/non-accelerated',
-               f'{folder_name}/{folder_name}_non_acc.gif')
+    for m in methods:
+        create_gif(folder_name+f'/{m}', f'{folder_name}/{folder_name}_{m}.gif')
 
     # plotting quantities along the flow
-    # if target_type == 'Gaussian':
-    plt.plot(means, label='deviation from mean')
-    plt.plot(covs, label='deviation from cov')
-    plt.plot(KLs, label='KL between empirical cov matrix and target cov')
-    plt.title(f'N ={N}, d = {2}, eps = {eps}, tau = {tau}')
-    plt.legend()
-    plt.yscale('log')
-    plt.savefig(f'{folder_name}/{folder_name}_loss.png',
-                dpi=300, bbox_inches='tight')
-    plt.show()
+    if d <= 2:
+        plt.plot(means, label='deviation from mean')
+        plt.plot(covs, label='deviation from cov')
+        plt.plot(KLs, label='KL between empirical cov matrix and target cov')
+        plt.title(f'N ={N}, d = {2}, eps = {eps}, tau = {tau}')
+        plt.legend()
+        plt.yscale('log')
+        plt.savefig(f'{folder_name}/{folder_name}_loss.svg',
+                    dpi=300, bbox_inches='tight')
+        plt.show()
 
     plot_paths(Xs, folder_name)
     plot_paths(Xs_non, folder_name, 'non-acc')
-
+    plot_paths(Xs_under, folder_name, 'underdamped')
+    plot_paths(Xs_over, folder_name, 'overdamped')
+    plot_paths(Xs_MALA, folder_name, 'MALA')
 
 acc_Stein_Particle_Flow()
