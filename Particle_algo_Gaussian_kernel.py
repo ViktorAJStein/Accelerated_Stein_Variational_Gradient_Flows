@@ -9,11 +9,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 # from sklearn.datasets import make_moons
 import scipy as sp
+from scipy.integrate import dblquad
 from targets import *
 from adds import *
 from plotting import *
 from tqdm import tqdm
 import pingouin as pg
+from scipy.stats import gaussian_kde
 
 # Set random seed for reproducibility
 np.random.seed(42)
@@ -36,11 +38,11 @@ def acc_Stein_Particle_Flow(
         verbose=True,
         arrows=True,
         eps=0.01,  # regularization parameter
-        N=250,  # number of particles
+        N=500,  # number of particles
         max_time=100,  # max time horizon
         d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
-        sigma=.1  # Gaussian kernel parameter
+        sigma=.5  # Gaussian kernel parameter
         ):
     tau = max_time / subdiv
     Y = np.zeros((N, d))  # initial velocities
@@ -84,11 +86,11 @@ def acc_Stein_Particle_Flow(
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
 
-    target_score = U3_grad
-    target_density = U3_density
-    target_type = 'squiggly2'
-    target_mean = np.zeros(2)
-    target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+    # target_score = U3_grad
+    # target_density = U3_density
+    # target_type = 'squiggly2'
+    # target_mean = np.zeros(2)
+    # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
 
     # target_score = U4_grad
     # target_density = U4_density
@@ -96,11 +98,15 @@ def acc_Stein_Particle_Flow(
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
 
-    # target_score = bimodal_grad
-    # target_density = bimodal_density
-    # target_type = 'non-Gaussian'
-    # target_mean = np.zeros(2)
-    # target_cov = np.array([[1.43, 0], [0, 9.125]])
+    target_score = bimodal_grad
+    target_density = bimodal_density
+    target_type = 'non-Gaussian'
+    target_mean = np.zeros(2)
+    target_cov = np.array([[1.43, 0], [0, 9.125]])
+    # Note: dblquad expects the inner integral variable first.
+    # Provide the integration limits for x and y
+    lnZ, _ = np.log(dblquad(lambda y, x: bimodal_density(x, y), -10, 10, lambda x: -10, lambda x: 10))
+
 
     # initialize quantities tracked along the flow
     means = np.zeros(subdiv)
@@ -127,9 +133,6 @@ def acc_Stein_Particle_Flow(
                'underdamped', 'MALA']
     for m in methods:
         make_folder(folder_name+f'/{m}')
-    # restart_counter is used to compute the acceleration parameter.
-    # It will be reset to 1 when a restart is triggered.
-    restart_counter = 1
 
     # non-accelerated particles
     X_non = X.copy()
@@ -144,7 +147,12 @@ def acc_Stein_Particle_Flow(
     temp = 1  # temperature * Boltzmann's constant
     m = 1  # mass of the particles
     sigma_0 = np.sqrt(2 * temp * tau / gamma)  # variance for the noise
-    U = lambda x: -np.log(target_density(x[0], x[1]))
+    
+    KL_acc = np.zeros(subdiv)
+    KL_non = np.zeros(subdiv)
+    KL_over = np.zeros(subdiv)
+    KL_under = np.zeros(subdiv)
+    KL_MALA = np.zeros(subdiv)
 
     def q_density(y, x, sigma2):
         """
@@ -168,8 +176,28 @@ def acc_Stein_Particle_Flow(
     Xs_under = np.zeros((subdiv, N, d))
     Xs_MALA = np.zeros((subdiv, N, d))
     X_prev = X.copy()
-    L = []
+    L = []  # list of \| W - id \|_2
+    
+    # restart_counter is used to compute the acceleration parameter for each particle.
+    # It will be reset to 1 when a restart is triggered.
+    restart_counter = np.ones(N)  # each particle starts with counter=1
+    alpha_k = np.zeros(N)         # acceleration parameter for each particle
+
     for k in tqdm(range(subdiv)):
+        # KDE for approximating KL loss via Monte Carlo
+        X_KDE = gaussian_kde(X.T)
+        X_non_KDE = gaussian_kde(X_non.T)
+        X_over_KDE = gaussian_kde(X_over.T)
+        X_under_KDE = gaussian_kde(X_under.T)
+        X_MALA_KDE = gaussian_kde(X_MALA.T)
+
+
+        KL_acc[k] = np.mean(np.log(X_KDE.evaluate(X.T) / np.array([target_density(x, y) for x, y in X])))
+        KL_non[k] = np.mean(np.log(X_non_KDE.evaluate(X_non.T) / np.array([target_density(x, y) for x, y in X_non])))
+        KL_over[k] = np.mean(np.log(X_over_KDE.evaluate(X_over.T) / np.array([target_density(x, y) for x, y in X_over])))
+        KL_under[k] = np.mean(np.log(X_under_KDE.evaluate(X_under.T) / np.array([target_density(x, y) for x, y in X_under])))
+        KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T) / np.array([target_density(x, y) for x, y in X_MALA])))
+
         if d == 2 and plot and not k % 25:
             plot_particles(X, Y, k, folder_name, target_density, 'k',
                            'accelerated', arrows)
@@ -187,13 +215,13 @@ def acc_Stein_Particle_Flow(
         Xs[k, :, :] = X
         # overdamped Langevin update (ULA) using Euler-Mayurama discretization
         X_over -= tau / gamma * np.apply_along_axis(target_score, 1, X_over)
-        X_over += sigma_0 * np.random.rand(N, d)
+        X_over += sigma_0 * np.random.randn(N, d)
         Xs_over[k, :, :] = X_over
         # underdamped Langevin update using Euler-Mayurama discretization
         X_under += tau * Y_under
         Y_under = (1 - gamma / m * tau)*Y_under
         Y_under -= tau / m * np.apply_along_axis(target_score, 1, X_under)
-        Y_under += sigma_0 * np.random.rand(N, d)
+        Y_under += sigma_0 * np.random.randn(N, d)
         Xs_under[k, :, :] = X_under
         # MALA
         grad_current = np.apply_along_axis(target_score, 1, X_MALA)  # (N, d)
@@ -253,28 +281,32 @@ def acc_Stein_Particle_Flow(
             KLs[k] = KL(empirical_cov, target_cov, np.linalg.inv(target_cov),
                         empirical_mean, target_mean)
         # two quantities for adaptive restart
-        norm_diff_current = np.linalg.norm(X - X_prev)  # ||x_{k+1} - x_k||
-        norm_diff_prev = np.linalg.norm(X_prev - X_old)  # ||x_k - x_{k-1}||
+        norm_diff_current = np.linalg.norm(X - X_prev, axis=1)  # ||x_{k+1}^i - x_k^i||
+        norm_diff_prev = np.linalg.norm(X_prev - X_old, axis=1)  # ||x_k^i - x_{k-1}^i||
 
         # adaptive restart
         if adaptive_restart and k > 0:
-            if target_type == 'Gaussian' and KLs[k] - KLs[k - 1] > 0:
-                if verbose:
-                    print(f'No KL-descent at iteration {k}, restarting momentum')
-                restart_counter = 1
+            # if target_type == 'Gaussian' and KLs[k] - KLs[k - 1] > 0:
+            #     if verbose:
+            #         print(f'No KL-descent at iteration {k}, restarting momentum')
+            #     restart_counter = 1
             # speed restart
-            elif target_type != 'Gaussian' and norm_diff_current < norm_diff_prev:
-                if verbose:
-                    print(f'No norm descent of iterates at iteration {k}, restarting momentum')
-                restart_counter = 1
+            if target_type != 'Gaussian':
+                # For each particle, check if the current step is smaller than the previous step
+                mask = norm_diff_current < norm_diff_prev
+                # If yes, restart for that particle; otherwise, increment its counter
+                restart_counter[mask] = 1
+                restart_counter[~mask] += 1
+                # plt.plot(restart_counter)
+                # plt.show()
             else:
                 restart_counter += 1
             # acceleration parameter
             alpha_k = (restart_counter - 1) / (restart_counter + 2)
         else:
-            alpha_k = (k - 1) / (k + 2)
+            alpha_k = (k - 1) / (k + 2)*np.ones(N)
         # update velocities
-        Y = (1 - tau*alpha_k) * Y
+        Y = (1 - tau*alpha_k[:, None]) * Y
         W = K + N * (K @ np.multiply(K, V@V.T) - np.multiply(K@V@V.T, K))
         W_laplacian = np.diag(W.sum(axis=1)) - W
         Y += tau / (N * 2 * sigma**2) * (W_laplacian @ X - 2*sigma**2 * K @ np.apply_along_axis(target_score, 1, X))
@@ -308,14 +340,13 @@ def acc_Stein_Particle_Flow(
         plt.title(f'N ={N}, d = {2}, eps = {eps}, tau = {tau}')
         plt.legend()
         plt.yscale('log')
-        plt.savefig(f'{folder_name}/{folder_name}_loss.svg',
+        plt.savefig(f'{folder_name}/{folder_name}_loss.png',
                     dpi=300, bbox_inches='tight')
         plt.show()
 
-    plot_paths(Xs, folder_name)
-    plot_paths(Xs_non, folder_name, 'non-acc')
-    plot_paths(Xs_under, folder_name, 'underdamped')
-    plot_paths(Xs_over, folder_name, 'overdamped')
-    plot_paths(Xs_MALA, folder_name, 'MALA')
+    # plot KL loss
+    plotKL(KL_acc, KL_non, KL_over, KL_under, KL_MALA, lnZ, folder_name)
+    # plot paths
+    plot_all_paths(Xs, Xs_non, Xs_under, Xs_over, Xs_MALA, folder_name)
 
 acc_Stein_Particle_Flow()

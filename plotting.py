@@ -21,7 +21,7 @@ def plot_particles(particles, velocities, label, folder_name, target, c, acc, ar
     if KDE:
         try:
             positions = np.vstack([X.ravel(), Y.ravel()])
-            values = np.vstack([m1, m2])
+            values = particles.T
             kernel = gaussian_kde(values)
             Z = np.reshape(kernel(positions).T, X.shape)
             ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,
@@ -64,6 +64,33 @@ def plot_paths(Xs, folder_name, add=''):
     plt.xlim([-8, 8])
     plt.ylim([-5, 5])
     plt.savefig(f'{folder_name}/{folder_name}_{add}_paths.png',
+                dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+def plot_all_paths(X, non, under, over, MALA, folder_name):
+    plot_paths(X, folder_name)
+    plot_paths(non, folder_name, 'non-acc')
+    plot_paths(under, folder_name, 'underdamped')
+    plot_paths(over, folder_name, 'overdamped')
+    plot_paths(MALA, folder_name, 'MALA')
+
+
+def plotKL(acc, non, over, under, MALA, lnZ, folder_name):
+    # Define the window size for the moving average
+    window_size = 10
+    window = np.ones(window_size) / window_size
+
+    plt.plot(acc+lnZ, label='accelerated')
+    plt.plot(non+lnZ, label='non-accelerated', alpha=.2)
+    plt.plot(np.convolve(non, window, mode='same')+lnZ, label='non-accelerated (smoothed)')
+    plt.plot(over+lnZ, label='overdamped Langvin')
+    plt.plot(under+lnZ, label='underdamped Langevin')
+    plt.plot(MALA+lnZ, label='MALA')
+    plt.legend()
+    plt.grid()
+    plt.title('Monte-Carlo approximation of KL')
+    plt.savefig(f'{folder_name}/{folder_name}_KL.png',
                 dpi=300, bbox_inches='tight')
     plt.show()
 
