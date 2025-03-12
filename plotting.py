@@ -45,18 +45,18 @@ def plot_particles(particles, velocities, label, folder_name, target, c, acc, ar
     plt.show()
 
 
-def plot_paths(Xs, folder_name, add=''):
+def plot_paths(k, Xs, folder_name, add=''):
     N = Xs.shape[1]
     cmap = plt.get_cmap('viridis')
     colors = [cmap(i) for i in np.linspace(0, 1, N)]
     plt.figure(figsize=(10, 8))
     for i in range(N):
         # Plot the trajectory with transparency (alpha).
-        plt.plot(Xs[:, i, 0], Xs[:, i, 1], c=colors[i], alpha=0.2)
+        plt.plot(Xs[:k, i, 0], Xs[:k, i, 1], c=colors[i], alpha=0.2)
         # Mark the starting point with a circle marker.
         plt.plot(Xs[0, i, 0], Xs[0, i, 1], marker='o', c=colors[i], ms=5)
         # Mark the endpoint with a square marker.
-        plt.plot(Xs[-1, i, 0], Xs[-1, i, 1], marker='s', c=colors[i], ms=5)
+        plt.plot(Xs[k-1, i, 0], Xs[k-1, i, 1], marker='s', c=colors[i], ms=5)
     plt.title(f'Particle Trajectories {add} \n'
               + folder_name + '\n'
               + ' Starting points are circles, endpoints are squares')
@@ -68,25 +68,25 @@ def plot_paths(Xs, folder_name, add=''):
     plt.show()
 
 
-def plot_all_paths(X, non, under, over, MALA, folder_name):
-    plot_paths(X, folder_name)
-    plot_paths(non, folder_name, 'non-acc')
-    plot_paths(under, folder_name, 'underdamped')
-    plot_paths(over, folder_name, 'overdamped')
-    plot_paths(MALA, folder_name, 'MALA')
+def plot_all_paths(k, X, non, under, over, MALA, folder_name):
+    plot_paths(k, X, folder_name)
+    plot_paths(k, non, folder_name, 'non-acc')
+    plot_paths(k, under, folder_name, 'underdamped')
+    plot_paths(k, over, folder_name, 'overdamped')
+    plot_paths(k, MALA, folder_name, 'MALA')
 
 
-def plotKL(acc, non, over, under, MALA, lnZ, folder_name):
+def plotKL(k, acc, non, over, under, MALA, lnZ, folder_name):
     # Define the window size for the moving average
     window_size = 10
     window = np.ones(window_size) / window_size
 
-    plt.plot(acc+lnZ, label='accelerated')
-    plt.plot(non+lnZ, label='non-accelerated', alpha=.2)
-    plt.plot(np.convolve(non, window, mode='same')+lnZ, label='non-accelerated (smoothed)')
-    plt.plot(over+lnZ, label='overdamped Langvin')
-    plt.plot(under+lnZ, label='underdamped Langevin')
-    plt.plot(MALA+lnZ, label='MALA')
+    plt.plot(np.arange(k), acc[:k]+lnZ, label='accelerated')
+    plt.plot(np.arange(k), non[:k]+lnZ, label='non-accelerated', alpha=.2)
+    plt.plot(np.arange(k), np.convolve(non[:k], window, mode='same')+lnZ, label='non-accelerated (smoothed)')
+    plt.plot(np.arange(k), over[:k]+lnZ, label='overdamped Langvin')
+    plt.plot(np.arange(k), under[:k]+lnZ, label='underdamped Langevin')
+    plt.plot(np.arange(k), MALA[:k]+lnZ, label='MALA')
     plt.legend()
     plt.grid()
     plt.title('Monte-Carlo approximation of KL')

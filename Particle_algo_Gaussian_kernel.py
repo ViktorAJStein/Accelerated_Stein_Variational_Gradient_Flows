@@ -38,11 +38,11 @@ def acc_Stein_Particle_Flow(
         verbose=True,
         arrows=True,
         eps=0.01,  # regularization parameter
-        N=500,  # number of particles
+        N=1000,  # number of particles
         max_time=100,  # max time horizon
         d=2,  # dimension of the particles
-        subdiv=1000,  # number of subdivisions of [0, max_time]
-        sigma=.5  # Gaussian kernel parameter
+        subdiv=10000,  # number of subdivisions of [0, max_time]
+        sigma=.01  # Gaussian kernel parameter
         ):
     tau = max_time / subdiv
     Y = np.zeros((N, d))  # initial velocities
@@ -59,53 +59,62 @@ def acc_Stein_Particle_Flow(
     prior_name = 'Gaussian'
 
     # target
-    # nu = np.ones(d)  # target mean
-    # Q = np.eye(d) * 5  # target covariance
-    # Q_inv = np.linalg.inv(Q)  # inverse target covariance matrix
+    nu = np.ones(d)  # target mean
+    Q = np.eye(d) * 5  # target covariance
+    Q_inv = np.linalg.inv(Q)  # inverse target covariance matrix
 
-    # def target_score(x):
-    #     return Q_inv @ (x - nu)
+    def target_score(x):
+        return Q_inv @ (x - nu)
 
-    # target_type = 'Gaussian'
-    # target_mean = nu
-    # target_cov = Q
+    target_type = 'Gaussian'
+    target_mean = nu
+    target_cov = Q
 
-    # def target_density(x, y):
-    #     point = np.dstack((x, y))
-    #     return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
+    def target_density(x, y):
+        point = np.dstack((x, y))
+        return sp.stats.multivariate_normal.pdf(point, mean=nu, cov=Q)
 
+    lnZ = np.sqrt(2 * np.pi) * np.linalg.det(Q)
     # target_score = gauss_mix_grad
     # target_density = gauss_mix_density
     # target_type = 'non-Gaussian'
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+    # lnZ, _ = np.log(dblquad(lambda y, x: gauss_mix_density(x, y), -10, 10, lambda x: -10, lambda x: 10))
+
 
     # target_score = U2_grad
     # target_density = U2_density
     # target_type = 'squiggly'
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+    # lnZ, _ = np.log(dblquad(lambda y, x: U2_density(x, y), -10, 10, lambda x: -10, lambda x: 10))
+
 
     # target_score = U3_grad
     # target_density = U3_density
     # target_type = 'squiggly2'
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+    # lnZ, _ = np.log(dblquad(lambda y, x: U3_density(x, y), -10, 10, lambda x: -10, lambda x: 10))
+
 
     # target_score = U4_grad
     # target_density = U4_density
     # target_type = 'squiggly3'
     # target_mean = np.zeros(2)
     # target_cov = np.eye(2) + 1/4*np.ones((2, 2))
+    # lnZ, _ = np.log(dblquad(lambda y, x: U4_density(x, y), -10, 10, lambda x: -10, lambda x: 10))
 
-    target_score = bimodal_grad
-    target_density = bimodal_density
-    target_type = 'non-Gaussian'
-    target_mean = np.zeros(2)
-    target_cov = np.array([[1.43, 0], [0, 9.125]])
-    # Note: dblquad expects the inner integral variable first.
-    # Provide the integration limits for x and y
-    lnZ, _ = np.log(dblquad(lambda y, x: bimodal_density(x, y), -10, 10, lambda x: -10, lambda x: 10))
+
+    # target_score = bimodal_grad
+    # target_density = bimodal_density
+    # target_type = 'non-Gaussian'
+    # target_mean = np.zeros(2)
+    # target_cov = np.array([[1.43, 0], [0, 9.125]])
+    # # Note: dblquad expects the inner integral variable first.
+    # # Provide the integration limits for x and y
+    # lnZ, _ = np.log(dblquad(lambda y, x: bimodal_density(x, y), -10, 10, lambda x: -10, lambda x: 10))
 
 
     # initialize quantities tracked along the flow
@@ -159,6 +168,7 @@ def acc_Stein_Particle_Flow(
         Proposal density q(y|x) for MALA, which is Gaussian with mean
         x - (dt/gamma) * grad_U(x) and variance sigma2.
         y and x are arrays of shape (N, d).
+        sigma2 is the variance sigma^2, not the std sigma.
         Returns: density evaluated for each particle (shape (N,))
         """
         d = x.shape[1]
@@ -177,7 +187,7 @@ def acc_Stein_Particle_Flow(
     Xs_MALA = np.zeros((subdiv, N, d))
     X_prev = X.copy()
     L = []  # list of \| W - id \|_2
-    
+
     # restart_counter is used to compute the acceleration parameter for each particle.
     # It will be reset to 1 when a restart is triggered.
     restart_counter = np.ones(N)  # each particle starts with counter=1
@@ -227,7 +237,7 @@ def acc_Stein_Particle_Flow(
         grad_current = np.apply_along_axis(target_score, 1, X_MALA)  # (N, d)
         # Generate proposal using Euler-Maruyama step:
         proposal_mean = X_MALA - tau/gamma * grad_current
-        proposal = proposal_mean + sigma_0 * np.random.randn()  # shape = (N, d)
+        proposal = proposal_mean + sigma_0 * np.random.randn(N, d)  # (N, d)
         # Compute the ratio of target densities:
         # π(x) ∝ exp(-U(x)), so the ratio is exp(-U(proposal) + U(current))
         up = np.array([target_density(row[0], row[1]) for row in proposal])
@@ -235,8 +245,8 @@ def acc_Stein_Particle_Flow(
         target_ratio = up / down  # (N, )
         # Compute the proposal density ratio:
         # q(current|proposal) / q(proposal|current)
-        q_forward = q_density(proposal, X_MALA, sigma_0)  # shape = (N, )
-        q_backward = q_density(X_MALA, proposal, sigma_0)  # shape = (N, )
+        q_forward = q_density(proposal, X_MALA, sigma_0**2)  # shape = (N, )
+        q_backward = q_density(X_MALA, proposal, sigma_0**2)  # shape = (N, )
         proposal_ratio = q_backward / q_forward  # shape = (N, )
         # Acceptance probability for each particle
         alpha = np.minimum(1, target_ratio * proposal_ratio)
@@ -269,6 +279,7 @@ def acc_Stein_Particle_Flow(
         try:
             V = np.linalg.pinv(K + N*eps*np.eye(N)) @ Y
         except Exception:
+            print('Breaking due to noninvertibility of K + N*eps*eye(N)')
             break
         if d == 2:
             empirical_mean = np.mean(X, axis=0)
@@ -345,8 +356,8 @@ def acc_Stein_Particle_Flow(
         plt.show()
 
     # plot KL loss
-    plotKL(KL_acc, KL_non, KL_over, KL_under, KL_MALA, lnZ, folder_name)
+    plotKL(k, KL_acc, KL_non, KL_over, KL_under, KL_MALA, lnZ, folder_name)
     # plot paths
-    plot_all_paths(Xs, Xs_non, Xs_under, Xs_over, Xs_MALA, folder_name)
+    plot_all_paths(k, Xs, Xs_non, Xs_under, Xs_over, Xs_MALA, folder_name)
 
 acc_Stein_Particle_Flow()
