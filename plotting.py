@@ -7,6 +7,9 @@ Created on Mon Mar 10 10:36:58 2025
 import numpy as np
 from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
+import matplotlib as mpl
+
 
 def plot_particles(particles, velocities, label, folder_name, target, c, acc, arrows, KDE=False):
     m1, m2 = particles[:, 0], particles[:, 1]
@@ -43,29 +46,48 @@ def plot_particles(particles, velocities, label, folder_name, target, c, acc, ar
     plt.savefig(f'{folder_name}/{acc}/{folder_name}_{label}.png',
                 dpi=300, bbox_inches='tight')
     plt.show()
-
+ 
 
 def plot_paths(k, Xs, folder_name, add=''):
     N = Xs.shape[1]
-    cmap = plt.get_cmap('viridis')
-    colors = [cmap(i) for i in np.linspace(0, 1, N)]
     plt.figure(figsize=(10, 8))
+    
+    # Set up colormap and normalization from blue (start) to red (end)
+    cmap = plt.get_cmap('coolwarm')
+    norm = mpl.colors.Normalize(vmin=0, vmax=k-1)
+    
+    ax = plt.gca()
+    
     for i in range(N):
-        # Plot the trajectory with transparency (alpha).
-        plt.plot(Xs[:k, i, 0], Xs[:k, i, 1], c=colors[i], alpha=0.2)
-        # Mark the starting point with a circle marker.
-        plt.plot(Xs[0, i, 0], Xs[0, i, 1], marker='o', c=colors[i], ms=5)
-        # Mark the endpoint with a square marker.
-        plt.plot(Xs[k-1, i, 0], Xs[k-1, i, 1], marker='s', c=colors[i], ms=5)
-    plt.title(f'Particle Trajectories {add} \n'
-              + folder_name + '\n'
-              + ' Starting points are circles, endpoints are squares')
+        # Extract the trajectory for particle i.
+        x = Xs[:k, i, 0]
+        y = Xs[:k, i, 1]
+        
+        # Create line segments so that each segment can be colored individually.
+        points = np.array([x, y]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        
+        # Create a LineCollection with a color gradient along the segments.
+        lc = LineCollection(segments, cmap=cmap, norm=norm)
+        # Set the array for the colormap; here, we use the time index.
+        lc.set_array(np.linspace(0, k-1, len(segments)))
+        lc.set_linewidth(2)
+        ax.add_collection(lc)
+        
+        # Mark the starting point with a circle (blue).
+        plt.plot(x[0], y[0], color=cmap(norm(0)), marker='o', ms=5)
+        # Mark the endpoint with a square (red).
+        plt.plot(x[-1], y[-1], color=cmap(norm(k-1)), marker='s', ms=5)
+    
+    plt.title(f'Particle Trajectories {add} \n{folder_name}\n'
+              +'Starting points are circles, endpoints are squares')
     plt.grid(True)
-    plt.xlim([-8, 8])
+    plt.xlim([-9, 9])
     plt.ylim([-5, 5])
     plt.savefig(f'{folder_name}/{folder_name}_{add}_paths.png',
                 dpi=300, bbox_inches='tight')
     plt.show()
+
 
 
 def plot_all_paths(k, X, non, under, over, MALA, folder_name):
@@ -82,8 +104,7 @@ def plotKL(k, acc, non, over, under, MALA, lnZ, folder_name):
     window = np.ones(window_size) / window_size
 
     plt.plot(np.arange(k), acc[:k]+lnZ, label='accelerated')
-    plt.plot(np.arange(k), non[:k]+lnZ, label='non-accelerated', alpha=.2)
-    plt.plot(np.arange(k), np.convolve(non[:k], window, mode='same')+lnZ, label='non-accelerated (smoothed)')
+    plt.plot(np.arange(k), non[:k]+lnZ, label='non-accelerated')
     plt.plot(np.arange(k), over[:k]+lnZ, label='overdamped Langvin')
     plt.plot(np.arange(k), under[:k]+lnZ, label='underdamped Langevin')
     plt.plot(np.arange(k), MALA[:k]+lnZ, label='MALA')
