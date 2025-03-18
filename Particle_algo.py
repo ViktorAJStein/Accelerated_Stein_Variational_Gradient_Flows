@@ -190,11 +190,11 @@ def acc_Stein_Particle_Flow(
         adaptive_restart=True,
         verbose=False,
         eps=0,  # regularization parameter
-        N=499,  # number of particles
-        max_time=100,  # max time horizon
+        N=500,  # number of particles
+        max_time=1,  # max time horizon
         d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
-        Q=np.array([[3, -2], [-2, 3]]),  # target covariance
+        Q=np.array([[3, 2], [2, 3]]),  # target covariance
         ):
     init_mean = np.zeros(d)  # initial mean
     init_cov = np.ones(d) @ np.ones(d) + np.eye(d)  # initial covariance
@@ -252,7 +252,7 @@ def acc_Stein_Particle_Flow(
     make_folder(folder_name)
     # restart_counter is used to compute the acceleration parameter.
     # It will be reset to 1 when a restart is triggered.
-    restart_counter = 1
+    restart_counter = 0
 
     Xs = np.zeros((subdiv, N, d))
     Xs_non = np.zeros((subdiv, N, d))
@@ -302,17 +302,17 @@ def acc_Stein_Particle_Flow(
             elif target_type != 'Gaussian' and norm_diff_current < norm_diff_prev:
                 if verbose:
                     print(f'No norm descent of iterates at iteration {k}, restarting momentum')
-                restart_counter = 1
+                restart_counter = 0
             else:
                 restart_counter += 1
             # acceleration parameter
-            alpha_k = (restart_counter - 1) / (restart_counter + 2)
+            alpha_k = (restart_counter) / (restart_counter + 3)
         else:
-            alpha_k = (k - 1) / (k + 2)
+            alpha_k = (k) / (k + 3)
         # update velocities
-        Y = (1 - tau*alpha_k) * Y
-        Y += tau * (X @ A - K @ np.apply_along_axis(target_score, 1, X) / N)
-        Y += tau / (N * N) * np.trace(V.T @ K @ V) * X @ A
+        Y = alpha_k * Y
+        Y += np.sqrt(tau) * (X @ A + K @ np.apply_along_axis(target_score, 1, X) / N)
+        Y += np.sqrt(tau) / (N * N) * np.trace(V.T @ K @ V) * X @ A
 
         # early stopping for efficiency
         if KLs[k] < 1e-7:

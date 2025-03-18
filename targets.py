@@ -5,7 +5,7 @@ densities and potential gradients of four different target densities
 """
 import numpy as np
 import scipy as sp
-from scipy.special import iv
+from scipy.special import gamma
 from scipy.integrate import dblquad
 
 
@@ -13,7 +13,7 @@ class target():
     '''
     target measure pi = 1/ Z e^(- f)
     density:    function handle for the unnormalized density e^(-f)
-    score:      function handle for \nabla ln(pi) = - \nabla f
+    score:      function handle for \nabla log(pi) = - \nabla f
     name:       string, name given to this target
     mean:       array of shape (d, ), mean of pi
     cov:        array of shape (d, d), covariance of pi
@@ -116,22 +116,81 @@ def gmm_score(x, a=np.array([1, 1])):
 
 
 def skew_Gaussian_score(x):
-    return - np.linalg.inv(np.array([[10, 0], [0, .1]])) @ (x - np.ones(2))
+    return - np.linalg.inv(np.array([[1, 0], [0, .5]])) @ (x - np.ones(2))
 
 
 def skew_Gaussian_density(x, y):
     point = np.dstack((x, y))
     return sp.stats.multivariate_normal.pdf(point,
                                             mean=np.ones(2),
-                                            cov=np.array([[10, 0], [0, .1]]))
+                                            cov=np.array([[1, 0], [0, .5]]))
 
+
+def nonLip_density(x, y):
+    return np.exp(- 1/4 * (x**4 + y**4))
+
+
+def nonLip_score(x):
+    return - x**3
+
+
+def cauchy_density(x, y):
+    return (1 + x**2 + y **2)**(-2)
+
+
+def cauchy_score(x):
+    return - 4 * x / (1 + np.linalg.norm(x)**2)
+
+
+def GMM_scale_density(x, y):
+    big = 100 * np.exp(- 50 * (x + 3)**2 - 50 * (y + 3)**2)
+    small = 1/10 * np.exp(-1 / 20 * (x - 3)**2 - 1 / 20 * (y - 3)**2)
+    return big + small
+
+
+def GMM_scale_score(x):
+    x0, x1 = x  # Extract x and y components
+    exp1 = np.exp(-50 * ((x0 + 3)**2 + (x1 + 3)**2))
+    exp2 = np.exp(-1/20 * ((x0 - 3)**2 + (x1 - 3)**2))
+    g = 100 * exp1 + (1/10) * exp2
+    dg_dx0 = -10000 * exp1 * (x0 + 3) - (1/100) * exp2 * (x0 - 3)
+    dg_dx1 = -10000 * exp1 * (x1 + 3) - (1/100) * exp2 * (x1 - 3)
+    grad_x0 = -dg_dx0 / g
+    grad_x1 = -dg_dx1 / g
+    return np.array([grad_x0, grad_x1])
+
+
+def GMM_many_density(x, y):
+    number = 4
+    means = [np.array([1, 1]), np.array([-1, 1]),
+             np.array([- 1, -1]), np.array([1, -1])]
+    return np.sum([1/number*sp.stats.multivariate_normal(m, np.eye(2)).pdf(np.array([x, y]))
+                   for m in means])
+
+
+def GMM_many_score(x):
+    pass
+
+
+GMM_many = target(GMM_many_density, GMM_many_score, 'GMM_many', np.zeros(2), 
+                  np.eye(2), 'TODO')
+
+GMM_scale = target(GMM_scale_density, GMM_scale_score, 'GMM_scale',
+                   np.zeros(2), np.array([[6.005, 1], [1, 6.005]]), 
+                   np.log(2*np.sqrt(2*np.pi)))
+
+nonLip = target(nonLip_density, nonLip_score, 'nonLip', np.zeros(2),
+                2 * gamma(3/4) / gamma(1/4) * np.diag(np.ones(2)),
+                1/2*gamma(1/4)**2)
+
+cauchy = target(cauchy_density, cauchy_score, 'Cauchy', None, None, np.pi)
 
 skewed_Gaussian = target(skew_Gaussian_density, skew_Gaussian_score,
                          'skewed_Gaussian',
-                         np.ones(2), np.array([[10, 0], [0, .1]]),
+                         np.ones(2), np.array([[1, 0], [0, .5]]),
                          np.log(
                              np.sqrt(2 * np.pi *
-                                     np.linalg.det(np.array([[10, 0], [0, .1]]))
+                                     np.linalg.det(np.array([[1, 0], [0, .5]]))
                                      )
                              )
                          )
