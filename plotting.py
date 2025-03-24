@@ -52,7 +52,7 @@ def plot_particles(particles, velocities, label, folder_name,
     plt.show()
 
 
-def plot_paths(k, Xs, folder_name, add=''):
+def plot_paths(k, Xs, folder_name, target, add=''):
     N = Xs.shape[1]
     plt.figure(figsize=(10, 8))
     # Set up colormap and normalization from blue (start) to red (end)
@@ -77,35 +77,49 @@ def plot_paths(k, Xs, folder_name, add=''):
         plt.plot(x[0], y[0], color=cmap(norm(0)), marker='o', ms=5)
         # Mark the endpoint with a square (red).
         plt.plot(x[-1], y[-1], color=cmap(norm(k-1)), marker='s', ms=5)
+    # Perform a kernel density estimate on the data:
+    xmin, xmax, ymin, ymax = -8, 8, -8, 8
+    X, Y = np.mgrid[xmin:xmax:200j, ymin:ymax:200j]
+    fig, ax = plt.subplots()
+    ax = plt.gca()
+    ax.set_xlim([xmin, xmax])
+    ax.set_ylim([ymin, ymax])
+    ax.set_aspect('equal', adjustable='box')
+    # plot contour lines of target density
+    T = target(X, Y)
+    if target.__name__ == "GMM_scale_density":
+        plt.contour(X, Y, T, levels=np.arange(25)/25, colors='black', alpha=.2)
+    else:
+        plt.contour(X, Y, T, levels=7, colors='black', alpha=.2)
 
-    plt.title(f'Particle Trajectories {add} \n'
-              + 'Starting points are circles, endpoints are squares')
+    plt.title(f'Particle Trajectories {add}')
     plt.grid(True)
-    plt.xlim([-7, 7])
-    plt.ylim([-5, 8])
+    plt.xlim([-8, 8])
+    plt.ylim([-5, 5])
     plt.savefig(f'{folder_name}/{folder_name}_{add}_paths.png',
                 dpi=300, bbox_inches='tight')
     plt.show()
 
 
-def plot_all_paths(k, X, non, under, over, MALA, folder_name):
-    plot_paths(k, X, folder_name)
-    plot_paths(k, non, folder_name, 'non-acc')
-    plot_paths(k, under, folder_name, 'underdamped')
-    plot_paths(k, over, folder_name, 'overdamped')
-    plot_paths(k, MALA, folder_name, 'MALA')
+def plot_all_paths(k, X, non, under, over, MALA, target, folder_name):
+    plot_paths(k, X, target, folder_name)
+    plot_paths(k, non, folder_name, target, 'SVGD')
+    plot_paths(k, under, folder_name, target, 'ULD')
+    plot_paths(k, over, folder_name, target, 'ULA')
+    plot_paths(k, MALA, folder_name, target, 'MALA')
 
 
 def plotKL(k, acc, non, over, under, MALA, lnZ, folder_name):
-    plt.plot(np.arange(k), acc[:k]+lnZ, label='accelerated SVGD')
-    plt.plot(np.arange(k), non[:k]+lnZ, label='non-accelerated SVGD')
-    plt.plot(np.arange(k), over[:k]+lnZ, label='overdamped Langevin')
-    plt.plot(np.arange(k), under[:k]+lnZ, label='underdamped Langevin')
+    plt.plot(np.arange(k), acc[:k]+lnZ, label='ASVGD')
+    plt.plot(np.arange(k), non[:k]+lnZ, label='SVGD')
+    plt.plot(np.arange(k), over[:k]+lnZ, label='ULA')
+    plt.plot(np.arange(k), under[:k]+lnZ, label='ULD')
     plt.plot(np.arange(k), MALA[:k]+lnZ, label='MALA')
     plt.legend()
     plt.yscale('symlog')
+    plt.xlabel('Iterations')
     plt.grid()
-    plt.title('Monte-Carlo approximation of KL')
+    plt.ylabel('Monte-Carlo approximation of KL')
     plt.savefig(f'{folder_name}/{folder_name}_KL.png',
                 dpi=300, bbox_inches='tight')
     plt.show()

@@ -8,8 +8,7 @@ K(x, y) = exp(-1/(2 sigma^2) * || x - y ||_2^2) w.r.t. the KL divergence
 import numpy as np
 import matplotlib.pyplot as plt
 # from sklearn.datasets import make_moons
-import scipy as sp
-# from scipy.integrate import dblquad
+# import scipy as sp
 import targets
 from adds import make_folder, create_gif
 from plotting import plot_particles, plot_all_paths, plotKL
@@ -39,10 +38,11 @@ def acc_Stein_Particle_Flow(
         plot=True,  # decide whether to plot the particles along the flow
         adaptive_restart=False,
         gradient_restart=False,
+        beta=.95,  # constant damping parameter
         verbose=True,
         arrows=True,
-        eps=.05,  # Waaserstein-2 regularization parameter
-        N=200,  # number of particles
+        eps=.1,  # Waaserstein-2 regularization parameter
+        N=500,  # number of particles
         max_time=100,  # max time horizon
         d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
@@ -50,9 +50,9 @@ def acc_Stein_Particle_Flow(
         target=targets.bananas,  # target from custom class (from targets.py)
         A=np.eye(2)  # parameter for bilinear kernel
         ):
-    tau = max_time / subdiv
-    Y = np.zeros((N, d))  # initial velocities
-
+    tau = max_time / subdiv  # constant step size
+    Y = np.zeros((N, d))  # initial acceleration
+    V = np.zeros((N, d))  # initial velocities
     kernel_choice = 'Gaussian'
 
     # intial distribution
@@ -72,6 +72,7 @@ def acc_Stein_Particle_Flow(
                        + f'Sigma_0={init_cov.flatten()},eps={eps},'
                        + f'max_time={max_time},subdiv={subdiv},tau={tau},'
                        + f'{target.name}_target_restart={adaptive_restart},'
+                       + f'beta={beta}'
                        + f'sigma={sigma},prior={prior_name},A={A.flatten()}'
                        + f'{kernel_choice}'
                        )
@@ -101,7 +102,7 @@ def acc_Stein_Particle_Flow(
     # parameter for Langevin dynamics
     gamma = 1  # friction coefficient for Langevin dynamics
     temp = 1  # temperature * Boltzmann's constant
-    m = 1.5  # mass of the particles
+    m = 1  # mass of the particles
     sigma_0 = np.sqrt(2 * temp * tau / gamma)  # variance for the noise
 
     def q_density(y, x, sigma2):
@@ -123,47 +124,60 @@ def acc_Stein_Particle_Flow(
     # history
     KL_acc, KL_non, KL_over, KL_under, KL_MALA = [np.zeros(subdiv+1)
                                                   for _ in range(5)]
-    Xs, Xs_non, Xs_over, Xs_under, Xs_MALA = [np.zeros((subdiv+1, N, d))
-                                              for _ in range(5)]
+    Xs, Vs, Xs_non, Xs_over, Xs_under, Xs_MALA = [np.zeros((subdiv+1, N, d))
+                                                  for _ in range(6)]
 
-    X_prev = X.copy()
-    # restart_counter is used to compute the acceleration parameter for each particle.
-    # It will be reset to 1 when a restart is triggered.
+    # restart_counter: for computing acceleration parameter for each particle
+    # will be reset to 1 when a restart is triggered.
     restart_counter = np.ones(N)  # each particle starts with counter=1
     alpha_k = np.zeros(N)         # acceleration parameter for each particle
 
     for k in tqdm(range(subdiv+1)):
+        if target.name == 'Gaussian':
+            if not pg.multivariate_normality(X, alpha=0.05).normal:
+                print(f'Iter: {k}: Points are likely not Gaussian')
+        if d == 1:
+            empirical_cov = np.cov(X, rowvar=False) * np.eye(1)
+        if d == 2:
+            empirical_mean = np.mean(X, axis=0)
+            empirical_cov = np.cov(X, rowvar=False)
+            if target.mean is not None and target.cov is not None:
+                means[k] = np.linalg.norm(empirical_mean - target.mean)
+                covs[k] = np.linalg.norm(empirical_cov - target.cov)
+        if N > 1 and d <= 2 and target.mean is not None and target.cov is not None:
+            KLs[k] = KL(empirical_cov, target.cov, np.linalg.inv(target.cov),
+                        empirical_mean, target.mean)
         # KDE for approximating KL loss via Monte Carlo
         if N > d:
             X_KDE = gaussian_kde(X.T)
             X_non_KDE = gaussian_kde(X_non.T)
             try:
                 X_over_KDE = gaussian_kde(X_over.T)
-                KL_over[k] = np.mean(np.log(X_over_KDE.evaluate(X_over.T) /
-                                            np.array([target.density(x, y)
-                                                      for x, y in X_over])))
+                KL_over[k] = np.mean(np.log(X_over_KDE.evaluate(X_over.T))
+                                     - np.log(np.array([target.density(x, y)
+                                                        for x, y in X_over])))
             except Exception:
                 print('Some values for overdamped are infs or NaNs')
             try:
                 X_under_KDE = gaussian_kde(X_under.T)
-                KL_under[k] = np.mean(np.log(X_under_KDE.evaluate(X_under.T) /
-                                              np.array([target.density(x, y)
+                KL_under[k] = np.mean(np.log(X_under_KDE.evaluate(X_under.T))
+                                      - np.log(np.array([target.density(x, y)
                                                         for x, y in X_under])))
             except Exception:
                 print('Some values for underdamped are infs or NaNs')
             X_MALA_KDE = gaussian_kde(X_MALA.T)
-            # approximate KL between particles and target (w/o normalization const)
-            KL_acc[k] = np.mean(np.log(X_KDE.evaluate(X.T) /
+            # approximate KL between particles and target (w/o normaliz. const)
+            KL_acc[k] = np.mean(np.log(X_KDE.evaluate(X.T)) - np.log(
                                         np.array([target.density(x, y)
                                                   for x, y in X])))
-            KL_non[k] = np.mean(np.log(X_non_KDE.evaluate(X_non.T) /
-                                        np.array([target.density(x, y)
-                                                  for x, y in X_non])))
-            KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T) /
-                                        np.array([target.density(x, y)
-                                                  for x, y in X_MALA])))
+            KL_non[k] = np.mean(np.log(X_non_KDE.evaluate(X_non.T))
+                                - np.log(np.array([target.density(x, y)
+                                                   for x, y in X_non])))
+            KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T))
+                                 - np.log(np.array([target.density(x, y)
+                                                    for x, y in X_MALA])))
 
-        if d == 2 and plot and not k % 100:
+        if d == 2 and plot and not k % 250:
             plot_particles(X, Y, k, folder_name, target.density, 'k',
                             'accelerated', arrows)
             plot_particles(X_non, Y_non, f'non_acc_{k}', folder_name,
@@ -174,22 +188,21 @@ def acc_Stein_Particle_Flow(
                             target.density, 'k', 'underdamped', arrows)
             plot_particles(X_MALA, None, f'MALA_{k}', folder_name,
                             target.density, 'k', 'MALA', arrows)
-        # save previous iters and concatenate history
-        X_old = X_prev.copy()
-        X_prev = X.copy()
         Xs[k, :, :] = X
+        Xs_over[k, :, :] = X_over
+        Xs_under[k, :, :] = X_under
+        Xs_MALA[k, :, :] = X_MALA
+        Xs_non[k, :, :] = X_non
         # overdamped Langevin update (ULA) using Euler-Mayurama discretization
         determ = tau / gamma * np.apply_along_axis(target.score, 1, X_over)
         rand = sigma_0 * np.random.randn(N, d)
         Y_over = determ + rand
         X_over += Y_over
-        Xs_over[k, :, :] = X_over
         # underdamped Langevin update using Euler-Mayurama discretization
         X_under += tau * Y_under
         Y_under = (1 - gamma / m * tau)*Y_under
         Y_under += tau / m * np.apply_along_axis(target.score, 1, X_under)
         Y_under += sigma_0 * np.random.randn(N, d)
-        Xs_under[k, :, :] = X_under
         # MALA
         grad_current = np.apply_along_axis(target.score, 1, X_MALA)  # (N, d)
         # Generate proposal using Euler-Maruyama step:
@@ -214,45 +227,28 @@ def acc_Stein_Particle_Flow(
         new_x = np.copy(X_MALA)
         new_x[accept] = proposal[accept]
         X_MALA = new_x
-        Xs_MALA[k, :, :] = X_MALA
-        # accelerated SVGD update positions
-        X += np.sqrt(tau) * Y
-        if target.name == 'Gaussian':
-            if not pg.multivariate_normality(X, alpha=0.05).normal:
-                print(f'Iter: {k}: Points are likely not Gaussian')
-        # kernel matrix
-        sq_norms = np.sum(X**2, axis=1)
-        D2 = sq_norms[:, None] + sq_norms[None, :] - 2 * np.dot(X, X.T)
-        K = np.exp(-D2 / (2 * sigma**2))
-
         # # SVGD i.e. non-accelerated Stein metric gradient flow
-        pairwise_dists = squareform(pdist(X_non))**2
-        h = sigma # np.sqrt(0.5 * np.median(pairwise_dists) / np.log(X.shape[0]+1))
+        h = sigma  # np.sqrt(0.5 * np.median(pairwise_dists) / np.log(X.shape[0]+1))
         # # compute the Gaussian kernel matrix
-        K_non = np.exp(- pairwise_dists / (2 * h**2))
-        Y_non = 1 / N * ((np.diag(K_non.sum(axis=1)) - K_non) @ X_non / sigma**2 + K_non @ np.apply_along_axis(target.score, 1, X_non))
+        if kernel_choice == 'Gaussian':
+            K_non = np.exp(- squareform(pdist(X_non))**2 / (2 * h**2))
+            Y_non = 1/N * ((np.diag(K_non.sum(axis=1)) - K_non) @ X_non / sigma**2
+                           + K_non @ np.apply_along_axis(target.score, 1, X_non))
+        elif kernel_choice == 'generalized_bilinear':
+            K_non = X @ A @ X.T + np.ones((N, N))
+            Y_non = X @ A - 1 / N * K_non @ np.apply_along_axis(target.score, 1, X_non)
         X_non += tau * Y_non
-        Xs_non[k, :, :] = X_non
-        # accelerated
-        V = np.linalg.solve(K / N + eps * np.eye(N), Y)
-
-        if d == 1:
-            empirical_cov = np.cov(X, rowvar=False) * np.eye(1)
-        if d == 2:
-            empirical_mean = np.mean(X, axis=0)
-            empirical_cov = np.cov(X, rowvar=False)
-            if target.mean is not None and target.cov is not None:
-                means[k] = np.linalg.norm(empirical_mean - target.mean)
-                covs[k] = np.linalg.norm(empirical_cov - target.cov)
-        if N > 1 and d <= 2 and target.mean is not None and target.cov is not None:
-            KLs[k] = KL(empirical_cov, target.cov, np.linalg.inv(target.cov),
-                        empirical_mean, target.mean)
-        # two quantities for adaptive restart
-        norm_diff_current = np.linalg.norm(X - X_prev, axis=1)  # ||x_{k+1}^i - x_k^i||
-        norm_diff_prev = np.linalg.norm(X_prev - X_old, axis=1)  # ||x_k^i - x_{k-1}^i||
-
+        # accelerated SVGD update positions
+        K = np.exp(- squareform(pdist(X))**2 / (2 * sigma**2))  # kernel matrix
+        X += np.sqrt(tau) * Y  # predictor for X
+        V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
+        Vs[k, :, :] = V
         # adaptive speed restart
-        if adaptive_restart and k > 0:
+        if adaptive_restart and k > 1:
+            # two quantities for adaptive restart
+            norm_diff_current = np.linalg.norm(X - Xs[k-1, :, :], axis=1)  # ||x_{k+1}^i - x_k^i||
+            norm_diff_prev = np.linalg.norm(Xs[k-1, :, :] - Xs[k-2, :, :], axis=1)  # ||x_k^i - x_{k-1}^i||
+
             # For each particle, check if current step is smaller than previous
             mask = norm_diff_current < norm_diff_prev
             # If yes, restart for that particle; else, increment its counter
@@ -260,34 +256,38 @@ def acc_Stein_Particle_Flow(
             restart_counter[~mask] += 1
             alpha_k = (restart_counter) / (restart_counter + 3)
         else:
-            alpha_k = .995*np.ones(N)
-        if gradient_restart:
-            A = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
-            # First term: sum_{i,j} K[i,j] * (f(X_i) + X_i) dot V_j 
-            term1 = np.sum((A.dot(V.T)) * K)
-            # Second term: sum_{i,j} K[i,j] * (X_j dot V_j).
-            # Note: For fixed j, X_j dot V_j does not depend on i, so:
-            term2 = np.sum(np.sum(K, axis=0) * np.sum(X * V, axis=1))
-            phi = term1 - term2
-            if phi < 0:
-                restart_counter = np.zeros(N)
-                print('gradient restart triggered')
-        # update velocities
-        Y = alpha_k[:, None] * Y
+            alpha_k = beta*np.ones(N)
+        # if gradient_restart:
+        #     A = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
+        #     # First term: sum_{i,j} K[i,j] * (f(X_i) + X_i) dot V_j 
+        #     term1 = np.sum((A.dot(V.T)) * K)
+        #     # Second term: sum_{i,j} K[i,j] * (X_j dot V_j).
+        #     # Note: For fixed j, X_j dot V_j does not depend on i, so:
+        #     term2 = np.sum(np.sum(K, axis=0) * np.sum(X * V, axis=1))
+        #     phi = term1 - term2
+        #     if phi < 0:
+        #         restart_counter = np.zeros(N)
+        #         print('gradient restart triggered')
+        # ASVGD
+        # K = np.exp(- squareform(pdist(X))**2 / (2 * sigma**2))  # kernel matrix
+        # Xtilde = X + np.sqrt(tau) * Y  # predictor for X
+        # Ktilde = np.exp(- squareform(pdist(Xtilde))**2 / (2 * sigma**2))  # kernel matrix predictor
+        Y = alpha_k[:, None] * Y  # predictor for Y
         W = K @ np.multiply(V @ V.T, K) - np.multiply(K@V@V.T, K) + N * K
+        # Z = np.multiply(K, V @ V.T) - K @ np.diag(np.sum(V**2, axis=1))
+        # W += 2 * eps * N * np.sqrt(tau) * Z
         W_laplacian = np.diag(W.sum(axis=1)) - W
         Y += np.sqrt(tau) / N * np.apply_along_axis(target.score, 1, X)
         if kernel_choice == 'generalized_bilinear':
             Y += np.sqrt(tau) * (1 + 1 / N**2 * np.trace(V.T @ K @ V)) * X @ A
         else:
-            Y += np.sqrt(tau) / (2 * N**2 * sigma**2) * W_laplacian @ X
-
-        # early stopping for efficiency
-        # if KLs[k] < 1e-7:
-        #     print('Functional values is below 1e-7, stopping iteration.')
-        #     break
-
-
+            Y += np.sqrt(tau) / (2 * N**2 * sigma**2) * W_laplacian @ X 
+            #  + eps * 3 / (np.sqrt(tau) * (k + 1)) * V
+        # corrector step
+        # corrector = np.linalg.pinv(np.eye(N) - eps * np.linalg.inv(Ktilde / N + eps * np.eye(N)))
+        # Y = corrector @ (Ytilde - eps * V)
+        # X += np.sqrt(tau) * Y
+        # V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
     if plot:
         for m in methods:
             create_gif(folder_name+f'/{m}', f'{folder_name}/{folder_name}_{m}.gif')
@@ -306,9 +306,11 @@ def acc_Stein_Particle_Flow(
 
     if plot:
         # plot KL loss
-        plotKL(k, KL_acc, KL_non, KL_over, KL_under, KL_MALA, target.lnZ, folder_name)
+        plotKL(k, KL_acc, KL_non, KL_over, KL_under, KL_MALA,
+               target.lnZ, folder_name)
         # plot paths
-        plot_all_paths(k, Xs, Xs_non, Xs_under, Xs_over, Xs_MALA, folder_name)
+        plot_all_paths(k, Xs, Xs_non, Xs_under, Xs_over, Xs_MALA,
+                       target.density, folder_name)
 
     return X
 
