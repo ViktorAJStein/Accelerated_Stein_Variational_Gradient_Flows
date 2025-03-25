@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 densities and potential gradients of four different target densities
-@author: vglom
+@author: Viktor Stein
 """
 import numpy as np
 import scipy as sp
@@ -20,13 +20,14 @@ class target():
     lnZ:        float, the normalization constant log(Z)
     '''
 
-    def __init__(self, density, score, name, mean, cov, lnZ):
+    def __init__(self, density, score, name, mean, cov, lnZ, lims):
         self.density = density
         self.score = score
         self.name = name
         self.mean = mean
         self.cov = cov
         self.lnZ = lnZ
+        self.lims = lims
 
 
 # U from ChatGPT is my f
@@ -106,7 +107,7 @@ def bananas_score(x):
     return - first - second
 
 
-def gmm_density(x, y, a1=1/2, a2=1/2):
+def gmm_density(x, y, a1=1, a2=1):
     first = np.exp(-1/2*(x-a1)**2 - 1/2*(y - a2)**2)
     return 1/(4*np.pi) * (first + np.exp(-1/2*(x+a1)**2 - 1/2*(y + a2)**2))
 
@@ -116,14 +117,14 @@ def gmm_score(x, a=np.array([1, 1])):
 
 
 def skew_Gaussian_score(x):
-    return - np.linalg.inv(np.array([[1, 0], [0, .5]])) @ (x - np.ones(2))
+    return - np.linalg.inv(np.array([[10, 0], [0, .05]])) @ (x - np.ones(2))
 
 
 def skew_Gaussian_density(x, y):
     point = np.dstack((x, y))
     return sp.stats.multivariate_normal.pdf(point,
                                             mean=np.ones(2),
-                                            cov=np.array([[1, 0], [0, .5]]))
+                                            cov=np.array([[10, 0], [0, .05]]))
 
 
 def nonLip_density(x, y):
@@ -135,7 +136,7 @@ def nonLip_score(x):
 
 
 def cauchy_density(x, y):
-    return (1 + x**2 + y **2)**(-2)
+    return (1 + x**2 + y**2)**(-2)
 
 
 def cauchy_score(x):
@@ -173,53 +174,65 @@ def GMM_many_score(x):
 
 
 GMM_many = target(GMM_many_density, GMM_many_score, 'GMM_many', np.zeros(2), 
-                  np.eye(2), 'TODO')
+                  np.eye(2), 'TODO',
+                  np.array([-8, 8, -8, 8]))
 
 GMM_scale = target(GMM_scale_density, GMM_scale_score, 'GMM_scale',
                    np.zeros(2), np.array([[6.005, 1], [1, 6.005]]), 
-                   np.log(2*np.sqrt(2*np.pi)))
+                   np.log(2*np.sqrt(2*np.pi)),
+                   np.array([-8, 8, -8, 8]))
 
 nonLip = target(nonLip_density, nonLip_score, 'nonLip', np.zeros(2),
                 2 * gamma(3/4) / gamma(1/4) * np.diag(np.ones(2)),
-                1/2*gamma(1/4)**2)
+                1/2*gamma(1/4)**2,
+                np.array([-8, 8, -8, 8]))
 
-cauchy = target(cauchy_density, cauchy_score, 'Cauchy', None, None, np.pi)
+cauchy = target(cauchy_density, cauchy_score, 'Cauchy', None, None, np.pi,
+                np.array([-8, 8, -8, 8]))
 
 skewed_Gaussian = target(skew_Gaussian_density, skew_Gaussian_score,
                          'skewed_Gaussian',
-                         np.ones(2), np.array([[1, 0], [0, .5]]),
+                         np.ones(2), np.array([[10, 0], [0, .05]]),
                          np.log(
                              np.sqrt(2 * np.pi *
-                                     np.linalg.det(np.array([[1, 0], [0, .5]]))
+                                     np.linalg.det(np.array([[10, 0], [0, .05]]))
                                      )
-                             )
+                             ),
+                         np.array([-10, 12, -4, 4])
                          )
 
 
 U2 = target(U2_density, U2_grad, 'squiggly', np.zeros(2),
             np.eye(2) + 1/4*np.ones((2, 2)),
-            np.log(dblquad(lambda y, x: U2_density(x, y), -10, 10, lambda x: -10, lambda x: 10))[0]
+            np.log(dblquad(lambda y, x: U2_density(x, y), -10, 10, lambda x: -10, lambda x: 10)[0]),
+            np.array([-8, 8, -8, 8])
             )
 
 # 1/2 N(a, Id) + 1/2 N(-a, Id)
 GMM = target(gmm_density, gmm_score, 'GMM', np.zeros(2),
              np.eye(2) + 1/4*np.ones((2, 2)),
-             np.log(dblquad(lambda y, x: gmm_density(x, y), -10, 10, lambda x: -10, lambda x: 10))[0]
+             np.log(dblquad(lambda y, x: gmm_density(x, y), -10, 10, lambda x: -10, lambda x: 10)[0]),
+             np.array([-8, 8, -8, 8])
              )
 
 
 U3 = target(U3_density, U3_grad, 'squiggly2', np.zeros(2),
             np.eye(2) + 1/4*np.ones((2, 2)),
-            np.log(dblquad(lambda y, x: U3_density(x, y), -10, 10, lambda x: -10, lambda x: 10))[0]
+            np.log(dblquad(lambda y, x: U3_density(x, y), -10, 10, lambda x: -10, lambda x: 10)[0]),
+            np.array([-8, 8, -8, 8])
             )
 
 
 U4 = target(U4_density, U4_grad, 'squiggly3', np.zeros(2),
             np.eye(2) + 1/4*np.ones((2, 2)),
-            np.log(dblquad(lambda y, x: U4_density(x, y), -10, 10, lambda x: -10, lambda x: 10))[0])
+            np.log(dblquad(lambda y, x: U4_density(x, y), -10, 10, lambda x: -10, lambda x: 10)[0]), 
+            np.array([-8, 8, -8, 8]))
 
 
 bananas = target(bananas_density, bananas_score, 'bananas', np.zeros(2),
                  np.array([[1.43, 0], [0, 9.125]]),
-                 np.log(dblquad(lambda y, x: bananas_density(x, y), -10, 10, lambda x: -10, lambda x: 10))[0]
+                 np.log(dblquad(lambda y, x: bananas_density(x, y), -100, 100, lambda x: -100, lambda x: 100)[0]),
+                 np.array([-8, 8, -8, 8])
                  )
+
+# normalization costant for bananas is \approx 8.30238

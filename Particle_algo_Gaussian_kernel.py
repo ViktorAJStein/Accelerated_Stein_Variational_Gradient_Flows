@@ -36,18 +36,18 @@ def acc_Stein_Particle_Flow(
         X=None,  # starting particles shape = N x d
         lnprob=None,
         plot=True,  # decide whether to plot the particles along the flow
-        adaptive_restart=False,
+        adaptive_restart=True,
         gradient_restart=False,
         beta=.95,  # constant damping parameter
         verbose=True,
         arrows=True,
         eps=.1,  # Waaserstein-2 regularization parameter
         N=500,  # number of particles
-        max_time=100,  # max time horizon
+        max_time=50,  # max time horizon
         d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
         sigma=.1,  # Gaussian kernel parameter
-        target=targets.bananas,  # target from custom class (from targets.py)
+        target=targets.skewed_Gaussian,  # target from custom class (from targets.py)
         A=np.eye(2)  # parameter for bilinear kernel
         ):
     tau = max_time / subdiv  # constant step size
@@ -56,7 +56,7 @@ def acc_Stein_Particle_Flow(
     kernel_choice = 'Gaussian'
 
     # intial distribution
-    init_mean = np.array([5, 0])  # initial mean
+    init_mean = np.array([0, 0])  # initial mean
     init_cov = np.eye(d)  # initial covariance
 
     # X, _ = make_moons(N, noise=.1, random_state=42)  # initial particles
@@ -64,6 +64,7 @@ def acc_Stein_Particle_Flow(
     # prior_name = 'bananas'
     # uniform time step size
     X = np.random.multivariate_normal(init_mean, init_cov, size=N)
+    print(np.mean(X**2, axis=0))
     prior_name = 'Gaussian'
     # initialize quantities tracked along the flow
     means, covs, KLs = 3*[np.zeros(subdiv+1)]
@@ -71,8 +72,9 @@ def acc_Stein_Particle_Flow(
         folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
                        + f'Sigma_0={init_cov.flatten()},eps={eps},'
                        + f'max_time={max_time},subdiv={subdiv},tau={tau},'
-                       + f'{target.name}_target_restart={adaptive_restart},'
-                       + f'beta={beta}'
+                       + f'{target.name}_target,'
+                       + f'adaptive_restart={adaptive_restart},'
+                       + f'beta={beta},gradient_restart={gradient_restart}'
                        + f'sigma={sigma},prior={prior_name},A={A.flatten()}'
                        + f'{kernel_choice}'
                        )
@@ -81,6 +83,10 @@ def acc_Stein_Particle_Flow(
                        + f'max_time={max_time},subdiv={subdiv},tau={tau},'
                        + f'{target.name}_target_restart={adaptive_restart},'
                        + f'sigma={sigma},prior={prior_name}'
+                       + f'adaptive_restart={adaptive_restart},'
+                       + f'beta={beta},gradient_restart={gradient_restart}'
+                       + f'sigma={sigma},prior={prior_name},A={A.flatten()}'
+                       + f'{kernel_choice}'
                        )
 
     make_folder(folder_name)
@@ -92,11 +98,11 @@ def acc_Stein_Particle_Flow(
     # non-accelerated particles
     X_non = X.copy()
     Y_non = Y.copy()
-    # Overdamped Langevin dynamics
+    # Overdamped Langevin dynamics (ULA)
     X_over = X.copy()
     Y_over = Y.copy()
     X_MALA = X.copy()
-    # Underdamped Langevin dynamics
+    # Underdamped Langevin dynamics (ULD)
     X_under = X.copy()
     Y_under = Y.copy()
     # parameter for Langevin dynamics
@@ -147,7 +153,7 @@ def acc_Stein_Particle_Flow(
         if N > 1 and d <= 2 and target.mean is not None and target.cov is not None:
             KLs[k] = KL(empirical_cov, target.cov, np.linalg.inv(target.cov),
                         empirical_mean, target.mean)
-        # KDE for approximating KL loss via Monte Carlo
+        # KDE for approximating KL loss via Monte Carlo (w/o normaliz. const)
         if N > d:
             X_KDE = gaussian_kde(X.T)
             X_non_KDE = gaussian_kde(X_non.T)
@@ -157,37 +163,39 @@ def acc_Stein_Particle_Flow(
                                      - np.log(np.array([target.density(x, y)
                                                         for x, y in X_over])))
             except Exception:
-                print('Some values for overdamped are infs or NaNs')
+                print('Some values for ULA are infs or NaNs')
             try:
                 X_under_KDE = gaussian_kde(X_under.T)
-                KL_under[k] = np.mean(np.log(X_under_KDE.evaluate(X_under.T))
+                KL_under[k] = np.mean(np.log(X_under_KDE.evaluate(X_under.T)+1e-12)
                                       - np.log(np.array([target.density(x, y)
-                                                        for x, y in X_under])))
+                                                        for x, y in X_under])+1e-12))
             except Exception:
-                print('Some values for underdamped are infs or NaNs')
-            X_MALA_KDE = gaussian_kde(X_MALA.T)
-            # approximate KL between particles and target (w/o normaliz. const)
-            KL_acc[k] = np.mean(np.log(X_KDE.evaluate(X.T)) - np.log(
+                print('Some values for ULD are infs or NaNs')
+            try:
+                X_MALA_KDE = gaussian_kde(X_MALA.T)
+            except Exception:
+                print('Some values for MALA are infs or NaNs')
+            KL_acc[k] = np.mean(np.log(X_KDE.evaluate(X.T)+1e-12) - np.log(
                                         np.array([target.density(x, y)
-                                                  for x, y in X])))
-            KL_non[k] = np.mean(np.log(X_non_KDE.evaluate(X_non.T))
+                                                  for x, y in X])+1e-12))
+            KL_non[k] = np.mean(np.log(X_non_KDE.evaluate(X_non.T)+1e-12)
                                 - np.log(np.array([target.density(x, y)
-                                                   for x, y in X_non])))
-            KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T))
+                                                   for x, y in X_non])+1e-12))
+            KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T)+1e-12)
                                  - np.log(np.array([target.density(x, y)
-                                                    for x, y in X_MALA])))
+                                                    for x, y in X_MALA])+1e-12))
 
         if d == 2 and plot and not k % 250:
-            plot_particles(X, Y, k, folder_name, target.density, 'k',
-                            'accelerated', arrows)
+            plot_particles(X, Y, k, folder_name, target, 'k',
+                           'accelerated', arrows)
             plot_particles(X_non, Y_non, f'non_acc_{k}', folder_name,
-                            target.density, 'k', 'non-accelerated', arrows)
+                           target, 'k', 'non-accelerated', arrows)
             plot_particles(X_over, Y_over, f'Overdamped_{k}', folder_name,
-                            target.density, 'k', 'overdamped', arrows)
+                           target, 'k', 'overdamped', arrows)
             plot_particles(X_under, Y_under, f'Underdamped_{k}', folder_name,
-                            target.density, 'k', 'underdamped', arrows)
+                           target, 'k', 'underdamped', arrows)
             plot_particles(X_MALA, None, f'MALA_{k}', folder_name,
-                            target.density, 'k', 'MALA', arrows)
+                           target, 'k', 'MALA', arrows)
         Xs[k, :, :] = X
         Xs_over[k, :, :] = X_over
         Xs_under[k, :, :] = X_under
@@ -257,17 +265,17 @@ def acc_Stein_Particle_Flow(
             alpha_k = (restart_counter) / (restart_counter + 3)
         else:
             alpha_k = beta*np.ones(N)
-        # if gradient_restart:
-        #     A = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
-        #     # First term: sum_{i,j} K[i,j] * (f(X_i) + X_i) dot V_j 
-        #     term1 = np.sum((A.dot(V.T)) * K)
-        #     # Second term: sum_{i,j} K[i,j] * (X_j dot V_j).
-        #     # Note: For fixed j, X_j dot V_j does not depend on i, so:
-        #     term2 = np.sum(np.sum(K, axis=0) * np.sum(X * V, axis=1))
-        #     phi = term1 - term2
-        #     if phi < 0:
-        #         restart_counter = np.zeros(N)
-        #         print('gradient restart triggered')
+        if gradient_restart:
+            A = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
+            # First term: sum_{i,j} K[i,j] * (f(X_i) + X_i) dot V_j 
+            term1 = np.sum((A.dot(V.T)) * K)
+            # Second term: sum_{i,j} K[i,j] * (X_j dot V_j).
+            # Note: For fixed j, X_j dot V_j does not depend on i, so:
+            term2 = np.sum(np.sum(K, axis=0) * np.sum(X * V, axis=1))
+            phi = term1 - term2
+            if phi < 0:
+                restart_counter = np.ones(N)
+                print('gradient restart triggered')
         # ASVGD
         # K = np.exp(- squareform(pdist(X))**2 / (2 * sigma**2))  # kernel matrix
         # Xtilde = X + np.sqrt(tau) * Y  # predictor for X
@@ -288,6 +296,22 @@ def acc_Stein_Particle_Flow(
         # Y = corrector @ (Ytilde - eps * V)
         # X += np.sqrt(tau) * Y
         # V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
+        # early stopping
+        if np.linalg.norm(np.apply_along_axis(target.score, 1, X)) < N * 1e-5:
+            print('Early stopping triggered by ASVGD')
+            break
+        if np.linalg.norm(np.apply_along_axis(target.score, 1, X_non)) < N * 1e-5:
+            print('Early stopping triggered by SVGD')
+            break
+        if np.linalg.norm(np.apply_along_axis(target.score, 1, X_MALA)) < N * 1e-5:
+            print('Early stopping triggered by MALA')
+            break
+        if np.linalg.norm(np.apply_along_axis(target.score, 1, X_under)) < N * 1e-5:
+            print('Early stopping triggered by ULD')
+            break
+        if np.linalg.norm(np.apply_along_axis(target.score, 1, X_over)) < N * 1e-5:
+            print('Early stopping triggered by ULA')
+            break
     if plot:
         for m in methods:
             create_gif(folder_name+f'/{m}', f'{folder_name}/{folder_name}_{m}.gif')
@@ -310,8 +334,9 @@ def acc_Stein_Particle_Flow(
                target.lnZ, folder_name)
         # plot paths
         plot_all_paths(k, Xs, Xs_non, Xs_under, Xs_over, Xs_MALA,
-                       target.density, folder_name)
+                       target, folder_name)
 
     return X
+
 
 acc_Stein_Particle_Flow()
