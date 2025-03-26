@@ -7,6 +7,7 @@ The file targets.py contains a custom class ```target```, which specifies the ta
 Auxiliary functions are collected in plotting.py, adds.py.
 
 If you use this code please cite this preprint, preferably like this:
+```
 @unpublished{SL25,
  title={Accelerated Stein Variational Gradient Flow},
  author={Stein, Viktor and Li, Wuchen},
@@ -16,6 +17,7 @@ If you use this code please cite this preprint, preferably like this:
  month = {Mar},
  url = {https://arxiv.org/abs/2503.TODO}
  }
+```
 
 Feedback / Contact
 ---
