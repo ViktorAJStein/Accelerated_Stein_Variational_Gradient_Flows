@@ -4,7 +4,7 @@ These python scripts evaluate and plot the discretized accelerated Stein variati
 Currently, only the Gaussian (or: RBF) kernel and the generalized bilinear kernel $K(x, y) := x^{\mathsf{T}} A y + 1$ are available, but more will be implemented soon.
 
 The file targets.py contains a custom class ```target```, which specifies the target distribution (its density, score, normalization constant...) and allows you to define your own target distributions.
-Auxiliary functions are collected in plotting.py, adds.py.
+Auxiliary functions are collected in ```plotting.py``` and ```adds.py```.
 
 If you use this code please cite this preprint, preferably like this:
 ```
