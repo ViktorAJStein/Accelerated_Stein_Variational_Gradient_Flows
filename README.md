@@ -21,7 +21,7 @@ If you use this code please cite this preprint, preferably like this:
 
 Feedback / Contact
 ---
-This code is written and maintained by [Viktor Stein](viktorajstein.github.io). Any comments, feedback, questions and bug reports are welcome! Alternatively you can use the GitHub issue tracker.
+This code is written and maintained by [Viktor Stein](https://viktorajstein.github.io). Any comments, feedback, questions and bug reports are welcome! Alternatively you can use the GitHub issue tracker.
 
 Required packages
 ---
