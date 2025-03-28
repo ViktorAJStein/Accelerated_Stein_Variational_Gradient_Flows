@@ -33,27 +33,25 @@ def KL(A, B, B_inv, mu, nu):
 
 
 def acc_Stein_Particle_Flow(
-        X=None,  # starting particles shape = N x d
-        lnprob=None,
         plot=True,  # decide whether to plot the particles along the flow
-        adaptive_restart=True,
-        gradient_restart=False,
-        beta=.95,  # constant damping parameter
+        speed_restart=True,
+        gradient_restart=True,
+        beta=0,  # constant damping parameter
         verbose=True,
         arrows=True,
-        eps=.1,  # Waaserstein-2 regularization parameter
+        eps=.1,  # Wasserstein-2 regularization parameter
         N=500,  # number of particles
-        max_time=50,  # max time horizon
+        max_time=10,  # max time horizon
         d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
         sigma=.1,  # Gaussian kernel parameter
-        target=targets.skewed_Gaussian,  # target from custom class (from targets.py)
+        target=targets.skewed_Gaussian,  # target from targets.py
+        kernel_choice='generalized_bilinear',
         A=np.eye(2)  # parameter for bilinear kernel
         ):
     tau = max_time / subdiv  # constant step size
     Y = np.zeros((N, d))  # initial acceleration
     V = np.zeros((N, d))  # initial velocities
-    kernel_choice = 'Gaussian'
 
     # intial distribution
     init_mean = np.array([0, 0])  # initial mean
@@ -69,29 +67,42 @@ def acc_Stein_Particle_Flow(
     # initialize quantities tracked along the flow
     means, covs, KLs = 3*[np.zeros(subdiv+1)]
     if d <= 2:
-        folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
-                       + f'Sigma_0={init_cov.flatten()},eps={eps},'
-                       + f'max_time={max_time},subdiv={subdiv},tau={tau},'
-                       + f'{target.name}_target,'
-                       + f'adaptive_restart={adaptive_restart},'
-                       + f'beta={beta},gradient_restart={gradient_restart}'
-                       + f'sigma={sigma},prior={prior_name},A={A.flatten()}'
-                       + f'{kernel_choice}'
-                       )
+        if kernel_choice == 'Gaussian':
+            folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
+                           + f'Sigma_0={init_cov.flatten()},eps={eps},'
+                           + f'max_time={max_time},subdiv={subdiv},tau={tau},'
+                           + f'{target.name}_target,'
+                           + f'speed_restart={speed_restart},'
+                           + f'beta={beta},'
+                           + f'gradient_restart={gradient_restart},'
+                           + f'sigma={sigma},prior={prior_name},'
+                           + f'{kernel_choice}'
+                           )
+        elif kernel_choice == 'generalized_bilinear':
+            folder_name = (f'N={N},d={d},mu_0={init_mean.flatten()},'
+                           + f'Sigma_0={init_cov.flatten()},eps={eps},'
+                           + f'max_time={max_time},subdiv={subdiv},tau={tau},'
+                           + f'{target.name}_target,'
+                           + f'speed_restart={speed_restart},'
+                           + f'beta={beta},'
+                           + f'gradient_restart={gradient_restart},'
+                           + f'prior={prior_name},{kernel_choice}'
+                           )
+        else:
+            print('No valid kernel choice selected!')
     else:
         folder_name = (f'N={N},d={d},eps={eps},'
                        + f'max_time={max_time},subdiv={subdiv},tau={tau},'
-                       + f'{target.name}_target_restart={adaptive_restart},'
+                       + f'{target.name}_target,speed_restart={speed_restart},'
                        + f'sigma={sigma},prior={prior_name}'
-                       + f'adaptive_restart={adaptive_restart},'
-                       + f'beta={beta},gradient_restart={gradient_restart}'
+                       + f'gradient_restart={gradient_restart},'
+                       + f'beta={beta},'
                        + f'sigma={sigma},prior={prior_name},A={A.flatten()}'
                        + f'{kernel_choice}'
                        )
 
     make_folder(folder_name)
-    methods = ['accelerated', 'non-accelerated', 'overdamped',
-               'underdamped', 'MALA']
+    methods = ['ASVGD', 'SVGD', 'ULA', 'ULD', 'MALA']
     for m in methods:
         make_folder(folder_name+f'/{m}')
 
@@ -155,8 +166,20 @@ def acc_Stein_Particle_Flow(
                         empirical_mean, target.mean)
         # KDE for approximating KL loss via Monte Carlo (w/o normaliz. const)
         if N > d:
-            X_KDE = gaussian_kde(X.T)
-            X_non_KDE = gaussian_kde(X_non.T)
+            try:
+                X_KDE = gaussian_kde(X.T)
+                KL_acc[k] = np.mean(np.log(X_KDE.evaluate(X.T)+1e-12) - np.log(
+                                            np.array([target.density(x, y)
+                                                      for x, y in X])+1e-12))
+            except Exception:
+                print('KDE for ASVGD failed')
+            try:
+                X_non_KDE = gaussian_kde(X_non.T)
+                KL_non[k] = np.mean(np.log(X_non_KDE.evaluate(X_non.T)+1e-12)
+                                    - np.log(np.array([target.density(x, y)
+                                                       for x, y in X_non])+1e-12))
+            except Exception:
+                print('KDE for SVGD failed')
             try:
                 X_over_KDE = gaussian_kde(X_over.T)
                 KL_over[k] = np.mean(np.log(X_over_KDE.evaluate(X_over.T))
@@ -173,27 +196,20 @@ def acc_Stein_Particle_Flow(
                 print('Some values for ULD are infs or NaNs')
             try:
                 X_MALA_KDE = gaussian_kde(X_MALA.T)
+                KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T)+1e-12)
+                                     - np.log(np.array([target.density(x, y)                                            for x, y in X_MALA])+1e-12))
             except Exception:
                 print('Some values for MALA are infs or NaNs')
-            KL_acc[k] = np.mean(np.log(X_KDE.evaluate(X.T)+1e-12) - np.log(
-                                        np.array([target.density(x, y)
-                                                  for x, y in X])+1e-12))
-            KL_non[k] = np.mean(np.log(X_non_KDE.evaluate(X_non.T)+1e-12)
-                                - np.log(np.array([target.density(x, y)
-                                                   for x, y in X_non])+1e-12))
-            KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T)+1e-12)
-                                 - np.log(np.array([target.density(x, y)
-                                                    for x, y in X_MALA])+1e-12))
 
-        if d == 2 and plot and not k % 250:
+        if d == 2 and plot and not k % 100:
             plot_particles(X, Y, k, folder_name, target, 'k',
-                           'accelerated', arrows)
+                           'ASVGD', arrows)
             plot_particles(X_non, Y_non, f'non_acc_{k}', folder_name,
-                           target, 'k', 'non-accelerated', arrows)
+                           target, 'k', 'SVGD', arrows)
             plot_particles(X_over, Y_over, f'Overdamped_{k}', folder_name,
-                           target, 'k', 'overdamped', arrows)
+                           target, 'k', 'ULA', arrows)
             plot_particles(X_under, Y_under, f'Underdamped_{k}', folder_name,
-                           target, 'k', 'underdamped', arrows)
+                           target, 'k', 'ULD', arrows)
             plot_particles(X_MALA, None, f'MALA_{k}', folder_name,
                            target, 'k', 'MALA', arrows)
         Xs[k, :, :] = X
@@ -243,32 +259,30 @@ def acc_Stein_Particle_Flow(
             Y_non = 1/N * ((np.diag(K_non.sum(axis=1)) - K_non) @ X_non / sigma**2
                            + K_non @ np.apply_along_axis(target.score, 1, X_non))
         elif kernel_choice == 'generalized_bilinear':
-            K_non = X @ A @ X.T + np.ones((N, N))
-            Y_non = X @ A - 1 / N * K_non @ np.apply_along_axis(target.score, 1, X_non)
+            K_non = X_non @ A @ X_non.T + np.ones((N, N))
+            Y_non = X_non @ A + 1 / N * K_non @ np.apply_along_axis(target.score, 1, X_non)
         X_non += tau * Y_non
         # accelerated SVGD update positions
         K = np.exp(- squareform(pdist(X))**2 / (2 * sigma**2))  # kernel matrix
-        X += np.sqrt(tau) * Y  # predictor for X
+        # X += np.sqrt(tau) * Y  # predictor for X
         V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
         Vs[k, :, :] = V
         # adaptive speed restart
-        if adaptive_restart and k > 1:
-            # two quantities for adaptive restart
+        if speed_restart and k > 0:
             norm_diff_current = np.linalg.norm(X - Xs[k-1, :, :], axis=1)  # ||x_{k+1}^i - x_k^i||
             norm_diff_prev = np.linalg.norm(Xs[k-1, :, :] - Xs[k-2, :, :], axis=1)  # ||x_k^i - x_{k-1}^i||
-
             # For each particle, check if current step is smaller than previous
             mask = norm_diff_current < norm_diff_prev
             # If yes, restart for that particle; else, increment its counter
             restart_counter[mask] = 0
             restart_counter[~mask] += 1
             alpha_k = (restart_counter) / (restart_counter + 3)
-        else:
+        elif not speed_restart:
             alpha_k = beta*np.ones(N)
         if gradient_restart:
-            A = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
+            B = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
             # First term: sum_{i,j} K[i,j] * (f(X_i) + X_i) dot V_j 
-            term1 = np.sum((A.dot(V.T)) * K)
+            term1 = np.sum((B.dot(V.T)) * K)
             # Second term: sum_{i,j} K[i,j] * (X_j dot V_j).
             # Note: For fixed j, X_j dot V_j does not depend on i, so:
             term2 = np.sum(np.sum(K, axis=0) * np.sum(X * V, axis=1))
@@ -285,16 +299,19 @@ def acc_Stein_Particle_Flow(
         # Z = np.multiply(K, V @ V.T) - K @ np.diag(np.sum(V**2, axis=1))
         # W += 2 * eps * N * np.sqrt(tau) * Z
         W_laplacian = np.diag(W.sum(axis=1)) - W
-        Y += np.sqrt(tau) / N * np.apply_along_axis(target.score, 1, X)
         if kernel_choice == 'generalized_bilinear':
-            Y += np.sqrt(tau) * (1 + 1 / N**2 * np.trace(V.T @ K @ V)) * X @ A
+            K = X @ A @ X.T + np.ones((N, N))
+            V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
+            Y += np.sqrt(tau) / N * K @ np.apply_along_axis(target.score, 1, X)
+            Y += np.sqrt(tau) * (1 + N**(-2) * np.trace(V.T @ K @ V)) * X @ A
         else:
-            Y += np.sqrt(tau) / (2 * N**2 * sigma**2) * W_laplacian @ X 
+            Y += np.sqrt(tau) / N * np.apply_along_axis(target.score, 1, X)
+            Y += np.sqrt(tau) / (2 * N**2 * sigma**2) * W_laplacian @ X
             #  + eps * 3 / (np.sqrt(tau) * (k + 1)) * V
         # corrector step
         # corrector = np.linalg.pinv(np.eye(N) - eps * np.linalg.inv(Ktilde / N + eps * np.eye(N)))
         # Y = corrector @ (Ytilde - eps * V)
-        # X += np.sqrt(tau) * Y
+        X += np.sqrt(tau) * Y
         # V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
         # early stopping
         if np.linalg.norm(np.apply_along_axis(target.score, 1, X)) < N * 1e-5:
