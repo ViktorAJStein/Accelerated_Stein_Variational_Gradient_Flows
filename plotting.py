@@ -91,17 +91,13 @@ def plot_paths(k, Xs, folder_name, target, add=''):
     X, Y = np.mgrid[xmin:xmax:200j, ymin:ymax:200j]
     ax.set_xlim([xmin, xmax])
     ax.set_ylim([ymin, ymax])
+    ax.set_axis_off()
     # plot contour lines of target density
     T = target.density(X, Y)
     if target.name == "GMM_scale_density":
-        plt.contour(X, Y, T, levels=np.arange(25)/25, colors='black', alpha=.2)
+        plt.contour(X, Y, T, levels=np.arange(50)/50, colors='black')
     else:
-        plt.contour(X, Y, T, levels=7, colors='black', alpha=.2)
-
-    # plt.title(f'Particle Trajectories {add}')
-    # plt.grid(True)
-    plt.xlim([xmin, xmax])
-    plt.ylim([ymin, ymax])
+        plt.contour(X, Y, T, levels=7, colors='black')
     plt.savefig(f'{folder_name}/{folder_name}_{add}_paths.png',
                 dpi=300, bbox_inches='tight')
     plt.show()
@@ -114,10 +110,11 @@ def plotKL(k, acc, non, over, under, MALA, lnZ, folder_name):
     plt.plot(np.arange(k), under[:k]+lnZ, label='ULD')
     plt.plot(np.arange(k), MALA[:k]+lnZ, label='MALA')
     plt.legend()
-    plt.yscale('symlog')
+    plt.yscale('log')
     plt.xlabel('Iterations')
-    plt.grid()
-    plt.ylabel('Monte-Carlo approximation of KL')
+    plt.grid(which='both')
+    plt.minorticks_on()
+    plt.ylabel('MC approximation of KL')
     plt.savefig(f'{folder_name}/{folder_name}_KL.png',
                 dpi=300, bbox_inches='tight')
     plt.show()

@@ -11,6 +11,17 @@ import os
 from PIL import Image
 
 
+# KL divergence of N(mu, A) to N(nu, B)
+def KL(A, B, B_inv, mu, nu):
+    _, logdet_A = np.linalg.slogdet(A)
+    _, logdet_B = np.linalg.slogdet(B)
+    first = np.trace(B_inv @ A)
+    second = logdet_B - logdet_A
+    third = (nu - mu).T @ B_inv @ (nu - mu)
+    d = A.shape[0]
+    return 0.5 * (first - d + second + third)
+
+
 def sampling(n_samples, pdf):
     # Define the support (bounding box) for sampling
     x_min, x_max = -4, 4

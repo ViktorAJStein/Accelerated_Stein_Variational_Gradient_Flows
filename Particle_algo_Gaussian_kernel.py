@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 # from sklearn.datasets import make_moons
 # import scipy as sp
 import targets
-from adds import make_folder, create_gif
+from adds import make_folder, create_gif, KL
 from plotting import plot_particles, plot_all_paths, plotKL
 from tqdm import tqdm
 import pingouin as pg
@@ -21,22 +21,11 @@ from scipy.spatial.distance import pdist, squareform
 np.random.seed(42)
 
 
-# KL divergence of N(mu, A) to N(nu, B)
-def KL(A, B, B_inv, mu, nu):
-    _, logdet_A = np.linalg.slogdet(A)
-    _, logdet_B = np.linalg.slogdet(B)
-    first = np.trace(B_inv @ A)
-    second = logdet_B - logdet_A
-    third = (nu - mu).T @ B_inv @ (nu - mu)
-    d = A.shape[0]
-    return 0.5 * (first - d + second + third)
-
-
 def acc_Stein_Particle_Flow(
         plot=True,  # decide whether to plot the particles along the flow
-        speed_restart=True,
-        gradient_restart=True,
-        beta=0,  # constant damping parameter
+        speed_restart=False,
+        gradient_restart=False,
+        beta=None,  # constant damping parameter
         verbose=True,
         arrows=True,
         eps=.1,  # Wasserstein-2 regularization parameter
@@ -45,7 +34,7 @@ def acc_Stein_Particle_Flow(
         d=2,  # dimension of the particles
         subdiv=1000,  # number of subdivisions of [0, max_time]
         sigma=.1,  # Gaussian kernel parameter
-        target=targets.skewed_Gaussian,  # target from targets.py
+        target=targets.Gaussian,  # target from targets.py
         kernel_choice='generalized_bilinear',
         A=np.eye(2)  # parameter for bilinear kernel
         ):
@@ -54,8 +43,8 @@ def acc_Stein_Particle_Flow(
     V = np.zeros((N, d))  # initial velocities
 
     # intial distribution
-    init_mean = np.array([0, 0])  # initial mean
-    init_cov = np.eye(d)  # initial covariance
+    init_mean = np.ones(d)  # initial mean
+    init_cov = np.ones(d) @ np.ones(d) + np.eye(d)  # initial covariance
 
     # X, _ = make_moons(N, noise=.1, random_state=42)  # initial particles
     # X = sampling(N, bananas_density)
@@ -84,7 +73,7 @@ def acc_Stein_Particle_Flow(
                            + f'max_time={max_time},subdiv={subdiv},tau={tau},'
                            + f'{target.name}_target,'
                            + f'speed_restart={speed_restart},'
-                           + f'beta={beta},'
+                           + f'beta={beta},A={A.flatten()}'
                            + f'gradient_restart={gradient_restart},'
                            + f'prior={prior_name},{kernel_choice}'
                            )
@@ -197,7 +186,8 @@ def acc_Stein_Particle_Flow(
             try:
                 X_MALA_KDE = gaussian_kde(X_MALA.T)
                 KL_MALA[k] = np.mean(np.log(X_MALA_KDE.evaluate(X_MALA.T)+1e-12)
-                                     - np.log(np.array([target.density(x, y)                                            for x, y in X_MALA])+1e-12))
+                                     - np.log(np.array([target.density(x, y)
+                                                        for x, y in X_MALA])+1e-12))
             except Exception:
                 print('Some values for MALA are infs or NaNs')
 
@@ -207,11 +197,11 @@ def acc_Stein_Particle_Flow(
             plot_particles(X_non, Y_non, f'non_acc_{k}', folder_name,
                            target, 'k', 'SVGD', arrows)
             plot_particles(X_over, Y_over, f'Overdamped_{k}', folder_name,
-                           target, 'k', 'ULA', arrows)
+                            target, 'k', 'ULA', arrows)
             plot_particles(X_under, Y_under, f'Underdamped_{k}', folder_name,
-                           target, 'k', 'ULD', arrows)
+                            target, 'k', 'ULD', arrows)
             plot_particles(X_MALA, None, f'MALA_{k}', folder_name,
-                           target, 'k', 'MALA', arrows)
+                            target, 'k', 'MALA', arrows)
         Xs[k, :, :] = X
         Xs_over[k, :, :] = X_over
         Xs_under[k, :, :] = X_under
@@ -264,7 +254,6 @@ def acc_Stein_Particle_Flow(
         X_non += tau * Y_non
         # accelerated SVGD update positions
         K = np.exp(- squareform(pdist(X))**2 / (2 * sigma**2))  # kernel matrix
-        # X += np.sqrt(tau) * Y  # predictor for X
         V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
         Vs[k, :, :] = V
         # adaptive speed restart
@@ -277,27 +266,32 @@ def acc_Stein_Particle_Flow(
             restart_counter[mask] = 0
             restart_counter[~mask] += 1
             alpha_k = (restart_counter) / (restart_counter + 3)
-        elif not speed_restart:
-            alpha_k = beta*np.ones(N)
+        elif beta is not None:
+            alpha_k = beta*np.ones(N)  # constant damping
+        else:
+            alpha_k = k / (k + 3) * np.ones(N)  # no restart
         if gradient_restart:
-            B = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
-            # First term: sum_{i,j} K[i,j] * (f(X_i) + X_i) dot V_j 
-            term1 = np.sum((B.dot(V.T)) * K)
-            # Second term: sum_{i,j} K[i,j] * (X_j dot V_j).
-            # Note: For fixed j, X_j dot V_j does not depend on i, so:
-            term2 = np.sum(np.sum(K, axis=0) * np.sum(X * V, axis=1))
-            phi = term1 - term2
+            if kernel_choice == 'generalized_bilinear':
+                nablafX = -np.apply_along_axis(target.score, 1, X)
+                phi = np.sum(V) * np.sum(nablafX)
+                phi += - N * np.trace(V @ A @ X.T)
+                phi += np.trace(V @ nablafX.T @ X @ A @ X.T)
+                phi = - phi
+            elif kernel_choice == 'Gaussian':
+                B = np.apply_along_axis(target.score, 1, X) + X  # (N x d)
+                # First term: sum_{i,j} K[i,j] * (f(X_i) + X_i) dot V_j
+                term1 = np.sum((B.dot(V.T)) * K)
+                # Second term: sum_{i,j} K[i,j] * (X_j dot V_j).
+                term2 = np.sum(np.sum(K, axis=0) * np.sum(X * V, axis=1))
+                phi = term1 - term2
             if phi < 0:
                 restart_counter = np.ones(N)
                 print('gradient restart triggered')
+        plt.plot(alpha_k)
+        plt.close()
         # ASVGD
-        # K = np.exp(- squareform(pdist(X))**2 / (2 * sigma**2))  # kernel matrix
-        # Xtilde = X + np.sqrt(tau) * Y  # predictor for X
-        # Ktilde = np.exp(- squareform(pdist(Xtilde))**2 / (2 * sigma**2))  # kernel matrix predictor
         Y = alpha_k[:, None] * Y  # predictor for Y
         W = K @ np.multiply(V @ V.T, K) - np.multiply(K@V@V.T, K) + N * K
-        # Z = np.multiply(K, V @ V.T) - K @ np.diag(np.sum(V**2, axis=1))
-        # W += 2 * eps * N * np.sqrt(tau) * Z
         W_laplacian = np.diag(W.sum(axis=1)) - W
         if kernel_choice == 'generalized_bilinear':
             K = X @ A @ X.T + np.ones((N, N))
@@ -307,12 +301,7 @@ def acc_Stein_Particle_Flow(
         else:
             Y += np.sqrt(tau) / N * np.apply_along_axis(target.score, 1, X)
             Y += np.sqrt(tau) / (2 * N**2 * sigma**2) * W_laplacian @ X
-            #  + eps * 3 / (np.sqrt(tau) * (k + 1)) * V
-        # corrector step
-        # corrector = np.linalg.pinv(np.eye(N) - eps * np.linalg.inv(Ktilde / N + eps * np.eye(N)))
-        # Y = corrector @ (Ytilde - eps * V)
         X += np.sqrt(tau) * Y
-        # V = N * np.linalg.solve(K + N * eps * np.eye(N), Y)
         # early stopping
         if np.linalg.norm(np.apply_along_axis(target.score, 1, X)) < N * 1e-5:
             print('Early stopping triggered by ASVGD')
@@ -345,15 +334,42 @@ def acc_Stein_Particle_Flow(
                     dpi=300, bbox_inches='tight')
         plt.show()
 
-    if plot:
-        # plot KL loss
-        plotKL(k, KL_acc, KL_non, KL_over, KL_under, KL_MALA,
-               target.lnZ, folder_name)
-        # plot paths
-        plot_all_paths(k, Xs, Xs_non, Xs_under, Xs_over, Xs_MALA,
-                       target, folder_name)
+    # plot KL loss
+    plotKL(k, KL_acc, KL_non, KL_over, KL_under, KL_MALA,
+           target.lnZ, folder_name)
+    # plot paths
+    plot_all_paths(k, Xs, Xs_non, Xs_under, Xs_over, Xs_MALA,
+                   target, folder_name)
 
-    return X
+    np.save(f'{folder_name}/ASVGD_particles', Xs)
+    np.save(f'{folder_name}/SVGD_particles', Xs_non)
+    np.save(f'{folder_name}/ULD_particles', Xs_under)
+    np.save(f'{folder_name}/ULA_particles', Xs_over)
+    np.save(f'{folder_name}/MALA_particles', Xs_MALA)
+    np.save(f'{folder_name}/ASVGD_KL', KL_acc)
+    np.save(f'{folder_name}/SVGD_KL', KL_non)
+    np.save(f'{folder_name}/ULD_KL', KL_under)
+    np.save(f'{folder_name}/ULA_KL', KL_over)
+    np.save(f'{folder_name}/MALA_KL', KL_MALA)
+
+    return Xs, Xs_non, Xs_under, Xs_over, Xs_MALA, V, KL_acc, KL_non, KL_over, KL_under, KL_MALA
 
 
-acc_Stein_Particle_Flow()
+_, _, _, _, _, _, KL_acc, KL_non, KL_over, KL_under, KL_MALA = acc_Stein_Particle_Flow()
+_, _, _, _, _, _, KL_acc_2, KL_non_2, _, _, _ = acc_Stein_Particle_Flow(A=8*np.linalg.inv(np.array([[3, -2], [-2, 3]])))
+
+plt.plot(KL_acc, label=r'ASVGD, $A = \text{id}_2$')
+plt.plot(KL_non, label=r'SVGD, $A = \text{id}_2$')
+plt.plot(KL_acc_2, label=r'ASVGD, $A = 8Q^{-1}$')
+plt.plot(KL_non_2, label=r'SVGD, $A = 8Q^{-1}$')
+plt.plot(KL_over, label='ULA')
+plt.plot(KL_under, label='ULD')
+plt.plot(KL_MALA, label='MALA')
+plt.legend()
+plt.yscale('log')
+plt.xlabel('Iterations')
+plt.grid(which='both')
+plt.minorticks_on()
+plt.ylabel('MC approximation of KL')
+plt.savefig('KL_comparison_8.png', dpi=300, bbox_inches='tight')
+plt.show()

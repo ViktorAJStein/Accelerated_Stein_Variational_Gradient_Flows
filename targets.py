@@ -38,7 +38,11 @@ class target():
 
 
 def U2_density(x, y):
-    return np.exp(- 25/8 * (y - np.sin(np.pi/2*x))**2)
+    return np.where(np.abs(x) < 10,
+                    np.where(np.abs(y) < 10,
+                             np.exp(-25/8 * (y - np.sin(np.pi/2 * x))**2),
+                             0),
+                    0)
 
 
 def U2_grad(x):
@@ -50,7 +54,11 @@ def U3_density(x, y):
     first = np.exp(-1/2*((y - np.sin(np.pi / 2 * x))/(.35))**2)
     w2 = 3*np.exp(-1/2*((x-1)/(.6))**2)
     second = np.exp(-1/2*((y - np.sin(np.pi / 2 * x) + w2)/(.35))**2)
-    return first + second
+    return np.where(np.abs(x) < 10,
+                    np.where(np.abs(y) < 10,
+                             first + second,
+                             0),
+                    0)
 
 
 def U3_grad(x):
@@ -67,7 +75,11 @@ def U3_grad(x):
     num2 = (-400/49 * C * term3 - 400/49 * term1 * (x[1] - term0))
     den2 = term3 + term1
     second_expr = num2 / den2
-    return np.array([first_expr, second_expr])
+    return np.where(np.abs(x[0]) < 10,
+                    np.where(np.abs(x[1]) < 10,
+                             np.array([first_expr, second_expr]),
+                             np.zeros(2)),
+                    np.zeros(2))
 
 
 def U4_density(x, y):
@@ -125,6 +137,17 @@ def skew_Gaussian_density(x, y):
     return sp.stats.multivariate_normal.pdf(point,
                                             mean=np.ones(2),
                                             cov=np.array([[10, 0], [0, .05]]))
+
+
+def Gaussian_score(x):
+    return - np.linalg.inv(np.array([[3, -2], [-2, 3]])) @ (x - np.zeros(2))
+
+
+def Gaussian_density(x, y):
+    point = np.dstack((x, y))
+    return sp.stats.multivariate_normal.pdf(point,
+                                            mean=np.zeros(2),
+                                            cov=np.array([[3, -2], [-2, 3]]))
 
 
 def nonLip_density(x, y):
@@ -185,7 +208,7 @@ GMM_scale = target(GMM_scale_density, GMM_scale_score, 'GMM_scale',
 nonLip = target(nonLip_density, nonLip_score, 'nonLip', np.zeros(2),
                 2 * gamma(3/4) / gamma(1/4) * np.diag(np.ones(2)),
                 1/2*gamma(1/4)**2,
-                np.array([-8, 8, -8, 8]))
+                np.array([-8, 8, -3, 3]))
 
 cauchy = target(cauchy_density, cauchy_score, 'Cauchy', None, None, np.pi,
                 np.array([-8, 8, -8, 8]))
@@ -193,19 +216,21 @@ cauchy = target(cauchy_density, cauchy_score, 'Cauchy', None, None, np.pi,
 skewed_Gaussian = target(skew_Gaussian_density, skew_Gaussian_score,
                          'skewed_Gaussian',
                          np.ones(2), np.array([[10, 0], [0, .05]]),
-                         np.log(
-                             np.sqrt(2 * np.pi *
-                                     np.linalg.det(np.array([[10, 0], [0, .05]]))
-                                     )
-                             ),
-                         np.array([-10, 12, -4, 4])
+                         0,
+                         np.array([-12, 14, -4, 4])
                          )
+
+Gaussian = target(Gaussian_density, Gaussian_score, 'Gaussian',
+                  np.zeros(2), np.array([[3, -2], [-2, 3]]),
+                  0,
+                  np.array([-8, 8, -8, 8])
+                  )
 
 
 U2 = target(U2_density, U2_grad, 'squiggly', np.zeros(2),
             np.eye(2) + 1/4*np.ones((2, 2)),
             np.log(dblquad(lambda y, x: U2_density(x, y), -10, 10, lambda x: -10, lambda x: 10)[0]),
-            np.array([-8, 8, -8, 8])
+            np.array([-11, 11, -11, 11])
             )
 
 # 1/2 N(a, Id) + 1/2 N(-a, Id)
@@ -232,7 +257,7 @@ U4 = target(U4_density, U4_grad, 'squiggly3', np.zeros(2),
 bananas = target(bananas_density, bananas_score, 'bananas', np.zeros(2),
                  np.array([[1.43, 0], [0, 9.125]]),
                  np.log(dblquad(lambda y, x: bananas_density(x, y), -100, 100, lambda x: -100, lambda x: 100)[0]),
-                 np.array([-8, 8, -8, 8])
+                 np.array([-8, 10, -8, 8])
                  )
 
 # normalization costant for bananas is \approx 8.30238
