@@ -12,10 +12,10 @@ If you use this code please cite this preprint, preferably like this:
  title={Accelerated Stein Variational Gradient Flow},
  author={Stein, Viktor and Li, Wuchen},
  note = {ArXiv preprint},
- volume = {arXiv:2503.TODO},
+ volume = {arXiv:2503.23462},
  year = {2025},
  month = {Mar},
- url = {https://arxiv.org/abs/2503.TODO}
+ url = {https://arxiv.org/abs/2503.23462}
  }
 ```
 
