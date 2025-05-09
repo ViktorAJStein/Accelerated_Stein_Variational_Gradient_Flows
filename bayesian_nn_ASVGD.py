@@ -588,8 +588,11 @@ class asvgd_bayesnn:
         '''
         for i in range(self.M):
             w1, b1, w2, b2, loggamma, loglambda = self.unpack_weights(self.theta[i, :])
-            pred_y_test[i, :] = self.nn_predict(X_test, w1, b1, w2, b2) * self.std_y_train + self.mean_y_train
-            prob[i, :] = np.sqrt(np.exp(loggamma)) / np.sqrt(2*np.pi)*np.exp( -1 * (np.power(pred_y_test[i, :] - y_test, 2) / 2) * np.exp(loggamma) )
+            pred_y_test[i, :] = self.nn_predict(X_test, w1, b1, w2, b2)
+            * self.std_y_train + self.mean_y_train
+            prob[i, :] = np.sqrt(np.exp(loggamma)) / np.sqrt(2*np.pi)
+            *np.exp(-1 * (np.power(pred_y_test[i, :] - y_test, 2) / 2)
+                    * np.exp(loggamma))
         pred = np.mean(pred_y_test, axis=0)
 
         # evaluation
@@ -600,99 +603,106 @@ class asvgd_bayesnn:
 
 
 if __name__ == '__main__':
-    np.random.seed(1)
-    random.seed(1)
+    datasets = ['wine', 'concrete', 'energy', 'housing', 'kin8nm', 'naval',
+                'power', 'protein', 'yacht']
+    for dataset in datasets:
+        np.random.seed(1)
+        random.seed(1)
 
-    # load dataset
-    dataset = 'wine'
-    path = 'C:\\Users\\vglom\\Documents\\TU Berlin\\SHK Steidl\\!Wuchen\\' \
-           + 'Accelerated gradient flows\\Code\\Code that works\\data\\'
-    data = np.loadtxt(f"{path}{dataset}.txt")
-    X_input = data[:, :-1]
-    y_input = data[:, -1]
+        # load dataset
+        path = 'C:\\Users\\vglom\\Documents\\TU Berlin\\SHK Steidl\\!Wuchen\\' \
+               + 'Accelerated gradient flows\\Code\\Code that works\\data\\'
+        data = np.loadtxt(f"{path}{dataset}.txt")
+        X_input = data[:, :-1]
+        y_input = data[:, -1]
 
-    # build train/test split
-    train_ratio = 0.9
-    permutation = np.arange(X_input.shape[0])
-    random.shuffle(permutation)
-    size_train = int(np.round(len(permutation) * train_ratio))
-    idx_train, idx_test = permutation[:size_train], permutation[size_train:]
-    X_train, y_train = X_input[idx_train], y_input[idx_train]
-    X_test, y_test = X_input[idx_test], y_input[idx_test]
+        # build train/test split
+        train_ratio = 0.9
+        permutation = np.arange(X_input.shape[0])
+        random.shuffle(permutation)
+        size_train = int(np.round(len(permutation) * train_ratio))
+        idx_train, idx_test = permutation[:size_train], permutation[size_train:]
+        X_train, y_train = X_input[idx_train], y_input[idx_train]
+        X_test, y_test = X_input[idx_test], y_input[idx_test]
 
-    # parameters
-    batch_size, n_hidden = 100, 50
-    maxiters = [10, 25, 50, 100, 200, 300, 400, 500, 1000, 1500, 2000, 5000]
-    n_runs = 20
+        # parameters
+        batch_size, n_hidden = 100, 50
+        maxiters = [10, 25, 50, 100, 200, 300, 400, 500, 1000, 1500, 2000, 5000]
+        n_runs = 20
 
-    # initialize result containers: runs x iters x metrics
-    results_svgd = np.zeros((n_runs, len(maxiters), 3))
-    results_asvgd = np.zeros((n_runs, len(maxiters), 3))
+        # initialize result containers: runs x iters x metrics
+        results_svgd = np.zeros((n_runs, len(maxiters), 3))
+        results_asvgd = np.zeros((n_runs, len(maxiters), 3))
 
-    for run in tqdm(range(n_runs)):
-        np.random.seed(run)
-        random.seed(run)
-        for k, iters in enumerate(maxiters):
-            # standard SVGD
-            start = time.time()
-            svgd = svgd_bayesnn(X_train, y_train,
-                                batch_size=batch_size,
-                                n_hidden=n_hidden,
-                                max_iter=iters)
-            svg_time = time.time() - start
-            svg_rmse, svg_ll = svgd.evaluation(X_test, y_test)
-            results_svgd[run, k, :] = [svg_rmse, svg_ll, svg_time]
+        for run in tqdm(range(n_runs)):
+            np.random.seed(run)
+            random.seed(run)
+            for k, iters in enumerate(maxiters):
+                # standard SVGD
+                start = time.time()
+                svgd = svgd_bayesnn(X_train, y_train,
+                                    batch_size=batch_size,
+                                    n_hidden=n_hidden,
+                                    max_iter=iters)
+                svg_time = time.time() - start
+                svg_rmse, svg_ll = svgd.evaluation(X_test, y_test)
+                results_svgd[run, k, :] = [svg_rmse, svg_ll, svg_time]
 
-            # accelerated SVGD (ASVGD)
-            start = time.time()
-            asvgd = asvgd_bayesnn(X_train, y_train,
-                                  batch_size=batch_size,
-                                  n_hidden=n_hidden,
-                                  max_iter=iters)
-            asvgd_time = time.time() - start
-            asg_rmse, asg_ll = asvgd.evaluation(X_test, y_test)
-            results_asvgd[run, k, :] = [asg_rmse, asg_ll, asvgd_time]
+                # accelerated SVGD (ASVGD)
+                start = time.time()
+                asvgd = asvgd_bayesnn(X_train, y_train,
+                                      batch_size=batch_size,
+                                      n_hidden=n_hidden,
+                                      max_iter=iters)
+                asvgd_time = time.time() - start
+                asg_rmse, asg_ll = asvgd.evaluation(X_test, y_test)
+                results_asvgd[run, k, :] = [asg_rmse, asg_ll, asvgd_time]
 
-    # save raw arrays
-    np.save(f'results_SVGD_{dataset}.npy', results_svgd)
-    np.save(f'results_ASVGD_{dataset}.npy', results_asvgd)
+        # save raw arrays
+        np.save(f'results_SVGD_{dataset}.npy', results_svgd)
+        np.save(f'results_ASVGD_{dataset}.npy', results_asvgd)
 
-    # compute statistics
-    stats = {}
-    for name, arr in [('SVGD', results_svgd), ('ASVGD', results_asvgd)]:
-        means = np.mean(arr, axis=0)
-        stds  = np.std(arr, axis=0)
-        stats[name] = {'mean': means, 'std': stds}
+        # compute statistics
+        stats = {}
+        for name, arr in [('SVGD', results_svgd), ('ASVGD', results_asvgd)]:
+            means = np.mean(arr, axis=0)
+            stds = np.std(arr, axis=0)
+            stats[name] = {'mean': means, 'std': stds}
 
-    # print tables
-    for name in ['SVGD', 'ASVGD']:
-        df_mean = pd.DataFrame(stats[name]['mean'], index=maxiters,
-                               columns=[f'{name}_RMSE', f'{name}_LL', f'{name}_time']).round(3)
-        df_std  = pd.DataFrame(stats[name]['std'],  index=maxiters,
-                               columns=[f'{name}_RMSE', f'{name}_LL', f'{name}_time']).round(3)
-        print(f"{name} Mean results over {n_runs} runs:")
-        print(df_mean)
-        print(f"\n{name} Std. dev. over {n_runs} runs:")
-        print(df_std)
-        print("\n" + "="*60 + "\n")
+        # print tables
+        for name in ['SVGD', 'ASVGD']:
+            df_mean = pd.DataFrame(stats[name]['mean'], index=maxiters,
+                                   columns=[f'{name}_RMSE', f'{name}_LL',
+                                            f'{name}_time']).round(3)
+            df_std = pd.DataFrame(stats[name]['std'],  index=maxiters,
+                                  columns=[f'{name}_RMSE', f'{name}_LL',
+                                           f'{name}_time']).round(3)
+            print(f"{name} Mean results over {n_runs} runs:")
+            print(df_mean)
+            print(f"\n{name} Std. dev. over {n_runs} runs:")
+            print(df_std)
+            print("\n" + "="*60 + "\n")
 
-    # plotting comparison with error bars for each metric
-    metrics = ['RMSE', 'LL', 'time']
-    ylabels = ['RMSE', 'Test Log-Likelihood', 'Time (seconds)']
-    titles = [f'SVGD vs ASVGD RMSE averaged over {n_runs} runs, {dataset}',
-               f'SVGD vs ASVGD Log-Likelihood averaged over {n_runs} runs, {dataset}',
-               f'SVGD vs ASVGD run time averaged over {n_runs} runs, {dataset}']
+        # plotting comparison with error bars for each metric
+        metrics = ['RMSE', 'LL', 'time']
+        ylabels = ['RMSE', 'Test Log-Likelihood', 'Time (seconds)']
+        titles = [f'RMSE averaged over {n_runs} runs, {dataset}',
+                  f'Log-Likelihood averaged over {n_runs} runs, {dataset}',
+                  f'run time averaged over {n_runs} runs, {dataset}']
 
-    for i, metric in enumerate(metrics):
-        plt.errorbar(maxiters,
-                     stats['SVGD']['mean'][:, i], yerr=stats['SVGD']['std'][:, i],
-                     marker='o', linestyle='-', label='SVGD')
-        plt.errorbar(maxiters,
-                     stats['ASVGD']['mean'][:, i], yerr=stats['ASVGD']['std'][:, i],
-                     marker='s', linestyle='--', label='ASVGD')
-        plt.xlabel('iterations')
-        plt.ylabel(ylabels[i])
-        plt.legend()
-        plt.title(titles[i])
-        plt.savefig(f'Comparison_{metric}_{dataset}.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        for i, metric in enumerate(metrics):
+            plt.errorbar(maxiters,
+                         stats['SVGD']['mean'][:, i],
+                         yerr=stats['SVGD']['std'][:, i],
+                         marker='o', linestyle='-', label='SVGD')
+            plt.errorbar(maxiters,
+                         stats['ASVGD']['mean'][:, i],
+                         yerr=stats['ASVGD']['std'][:, i],
+                         marker='s', linestyle='--', label='ASVGD')
+            plt.xlabel('iterations')
+            plt.ylabel(ylabels[i])
+            plt.legend()
+            plt.title(titles[i])
+            plt.savefig(f'Comparison_{metric}_{dataset}.png',
+                        dpi=300, bbox_inches='tight')
+            plt.show()
