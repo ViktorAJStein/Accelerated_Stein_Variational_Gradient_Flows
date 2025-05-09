@@ -25,11 +25,13 @@ This code is written and maintained by [Viktor Stein](https://viktorajstein.gith
 
 Required packages
 ---
-* numpy
-* matplotlib.pyplot
-* scipy
-* tqdm
-* pingouin
+* numpy=1.22.3
+* matplotlib=3.5.3
+* scipy=1.7.3
+* tqdm=4.67.1
+* pingouin=
+* theano=1.0.5 (only for the BNN example)
+* pandas=1.5.3 (only for the BNN example)
 
 Supported targets
 ---------------------------
