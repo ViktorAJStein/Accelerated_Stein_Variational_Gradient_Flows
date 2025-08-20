@@ -300,7 +300,7 @@ def acc_Stein_Particle_Flow(
             Y += np.sqrt(tau) * (1 + N**(-2) * np.trace(V.T @ K @ V)) * X @ A
         else:
             Y += np.sqrt(tau) / N * np.apply_along_axis(target.score, 1, X)
-            Y += np.sqrt(tau) / (2 * N**2 * sigma**2) * W_laplacian @ X
+            Y += np.sqrt(tau) / (N**2 * sigma**2) * W_laplacian @ X
         X += np.sqrt(tau) * Y
         # early stopping
         if np.linalg.norm(np.apply_along_axis(target.score, 1, X)) < N * 1e-5:
@@ -373,3 +373,4 @@ plt.minorticks_on()
 plt.ylabel('MC approximation of KL')
 plt.savefig('KL_comparison_8.png', dpi=300, bbox_inches='tight')
 plt.show()
+
