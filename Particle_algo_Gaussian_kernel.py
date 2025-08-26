@@ -355,8 +355,8 @@ def acc_Stein_Particle_Flow(
     return Xs, Xs_non, Xs_under, Xs_over, Xs_MALA, V, KL_acc, KL_non, KL_over, KL_under, KL_MALA
 
 
-_, _, _, _, _, _, KL_acc, KL_non, KL_over, KL_under, KL_MALA = acc_Stein_Particle_Flow()
-_, _, _, _, _, _, KL_acc_2, KL_non_2, _, _, _ = acc_Stein_Particle_Flow(A=8*np.linalg.inv(np.array([[3, -2], [-2, 3]])))
+*_, KL_acc, KL_non, KL_over, KL_under, KL_MALA = acc_Stein_Particle_Flow()
+*_, KL_acc_2, KL_non_2, _, _, _ = acc_Stein_Particle_Flow(A=8*np.linalg.inv(np.array([[3, -2], [-2, 3]])))
 
 plt.plot(KL_acc, label=r'ASVGD, $A = \text{id}_2$')
 plt.plot(KL_non, label=r'SVGD, $A = \text{id}_2$')
@@ -373,4 +373,5 @@ plt.minorticks_on()
 plt.ylabel('MC approximation of KL')
 plt.savefig('KL_comparison_8.png', dpi=300, bbox_inches='tight')
 plt.show()
+
 
