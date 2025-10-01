@@ -8,15 +8,15 @@ Auxiliary functions are collected in ```plotting.py``` and ```adds.py```.
 
 If you use this code please cite this preprint, preferably like this:
 ```
-@unpublished{SL25,
- title={Accelerated Stein Variational Gradient Flow},
- author={Stein, Viktor and Li, Wuchen},
- note = {ArXiv preprint},
- volume = {arXiv:2503.23462},
- year = {2025},
- month = {Mar},
- url = {https://arxiv.org/abs/2503.23462}
- }
+@inproceedings{SL2025,
+    author = {Viktor Stein and Wuchen Li},
+    title = {Accelerated {S}tein Variational Gradient Flow},
+    booktitle = {Geometric Science of Information. 7th International Conference, GSI 2025, Saint-Malo, France, October 29–31, 2025, Proceedings},
+    year = {2025},
+    series = {Lecture Notes in Computer Science},
+    volume = {16033},
+    editor = {Frank Nielsen and Frédéric Barbaresco}
+}
 ```
 
 Feedback / Contact
