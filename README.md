@@ -8,14 +8,19 @@ Auxiliary functions are collected in ```plotting.py``` and ```adds.py```.
 
 If you use this code please cite this preprint, preferably like this:
 ```
-@inproceedings{SL2025,
+@inproceedings{SL2026,
     author = {Viktor Stein and Wuchen Li},
     title = {Accelerated {S}tein Variational Gradient Flow},
     booktitle = {Geometric Science of Information. 7th International Conference, GSI 2025, Saint-Malo, France, October 29–31, 2025, Proceedings},
-    year = {2025},
+    publisher = {Springer Nature Switzerland},
+    year = {2026},
     series = {Lecture Notes in Computer Science},
+    address= {Cham},
+    pages = {80--90},
     volume = {16033},
-    editor = {Frank Nielsen and Frédéric Barbaresco}
+    editor = {Frank Nielsen and Frédéric Barbaresco},
+    doi = {https://doi.org/10.1007/978-3-032-03921-7_9},
+    eprint = {https://link.springer.com/chapter/10.1007/978-3-032-03921-7_9}
 }
 ```
 
