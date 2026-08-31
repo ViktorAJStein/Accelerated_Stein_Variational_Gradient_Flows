@@ -1,0 +1,381 @@
+{
+  "profile": "paper",
+  "quick_debug_only": false,
+  "experiments": [
+    "gaussian_bilinear",
+    "non_lipschitz",
+    "double_bananas",
+    "anisotropic_gaussian"
+  ],
+  "summaries": {
+    "gaussian_bilinear": {
+      "experiment": "gaussian_bilinear",
+      "paper_scale": true,
+      "historical_metric": {
+        "ASVGD": {
+          "initial": 2.4647806102768177,
+          "final": 0.04006833874479119,
+          "minimum": 0.040068326019865715,
+          "minimum_iteration": 911
+        },
+        "SVGD": {
+          "initial": 2.4647806102768177,
+          "final": 0.04007750580410224,
+          "minimum": 0.04007750580410224,
+          "minimum_iteration": 1000
+        },
+        "ULA": {
+          "initial": 2.4647806102768177,
+          "final": 0.05439465545916475,
+          "minimum": 0.03381671583016285,
+          "minimum_iteration": 586
+        },
+        "ULD": {
+          "initial": 2.4647806102768177,
+          "final": 0.03970229506008871,
+          "minimum": 0.03041354058094583,
+          "minimum_iteration": 968
+        },
+        "MALA": {
+          "initial": 2.4647806102768177,
+          "final": 0.07361253117208279,
+          "minimum": 0.031063556496853252,
+          "minimum_iteration": 868
+        }
+      },
+      "independent_final_kde_kl": {
+        "ASVGD": {
+          "estimate": 0.02704412217658735,
+          "standard_error": 0.0027804508470124596,
+          "samples": 10000
+        },
+        "SVGD": {
+          "estimate": 0.025521417384676174,
+          "standard_error": 0.0026280876966834166,
+          "samples": 10000
+        },
+        "ULA": {
+          "estimate": 0.04096285862214766,
+          "standard_error": 0.0030752226544251476,
+          "samples": 10000
+        },
+        "ULD": {
+          "estimate": 0.030294340196672122,
+          "standard_error": 0.0025952929366018056,
+          "samples": 10000
+        },
+        "MALA": {
+          "estimate": 0.03909060898008786,
+          "standard_error": 0.004290348276943707,
+          "samples": 10000
+        }
+      },
+      "restart_counts": {
+        "speed_particle_events": 0,
+        "gradient_events": 0
+      },
+      "failure_iterations": {
+        "ASVGD": null,
+        "SVGD": null,
+        "ULA": null,
+        "ULD": null,
+        "MALA": null
+      },
+      "Qinv_comparison": {
+        "experiment": "gaussian_bilinear_Qinv",
+        "paper_scale": true,
+        "historical_metric": {
+          "ASVGD": {
+            "initial": 2.4647806102768177,
+            "final": 0.040073456289040035,
+            "minimum": 0.04006838793652785,
+            "minimum_iteration": 914
+          },
+          "SVGD": {
+            "initial": 2.4647806102768177,
+            "final": 0.041345874595461934,
+            "minimum": 0.041345874595461934,
+            "minimum_iteration": 1000
+          },
+          "ULA": {
+            "initial": 2.4647806102768177,
+            "final": 0.05439465545916475,
+            "minimum": 0.03381671583016285,
+            "minimum_iteration": 586
+          },
+          "ULD": {
+            "initial": 2.4647806102768177,
+            "final": 0.03970229506008871,
+            "minimum": 0.03041354058094583,
+            "minimum_iteration": 968
+          },
+          "MALA": {
+            "initial": 2.4647806102768177,
+            "final": 0.07361253117208279,
+            "minimum": 0.031063556496853252,
+            "minimum_iteration": 868
+          }
+        },
+        "independent_final_kde_kl": {
+          "ASVGD": {
+            "estimate": 0.027358529448573393,
+            "standard_error": 0.0027991803436209217,
+            "samples": 10000
+          },
+          "SVGD": {
+            "estimate": 0.022219847018644597,
+            "standard_error": 0.0023943735518339023,
+            "samples": 10000
+          },
+          "ULA": {
+            "estimate": 0.04096285862214766,
+            "standard_error": 0.0030752226544251476,
+            "samples": 10000
+          },
+          "ULD": {
+            "estimate": 0.030294340196672122,
+            "standard_error": 0.0025952929366018056,
+            "samples": 10000
+          },
+          "MALA": {
+            "estimate": 0.03909060898008786,
+            "standard_error": 0.004290348276943707,
+            "samples": 10000
+          }
+        },
+        "restart_counts": {
+          "speed_particle_events": 0,
+          "gradient_events": 0
+        },
+        "failure_iterations": {
+          "ASVGD": null,
+          "SVGD": null,
+          "ULA": null,
+          "ULD": null,
+          "MALA": null
+        }
+      }
+    },
+    "non_lipschitz": {
+      "experiment": "non_lipschitz",
+      "paper_scale": true,
+      "historical_metric": {
+        "ASVGD": {
+          "initial": 31.135047409000933,
+          "final": 4.67820507971158,
+          "minimum": 4.676156213138297,
+          "minimum_iteration": 397
+        },
+        "SVGD": {
+          "initial": 31.135047409000933,
+          "final": 4.975494575170595,
+          "minimum": 4.975494575170595,
+          "minimum_iteration": 1000
+        },
+        "ULA": {
+          "initial": 31.135047409000933,
+          "final": 6.572523603298438,
+          "minimum": -1.5160168484640968,
+          "minimum_iteration": 5
+        },
+        "ULD": {
+          "initial": 31.135047409000933,
+          "final": 4.719867195259579,
+          "minimum": 4.68613602049295,
+          "minimum_iteration": 726
+        },
+        "MALA": {
+          "initial": 31.135047409000933,
+          "final": 20.04268218153281,
+          "minimum": 20.01966767317316,
+          "minimum_iteration": 716
+        }
+      },
+      "independent_final_kde_kl": {
+        "ASVGD": {
+          "estimate": 0.004870068101615948,
+          "standard_error": 0.000903242625494212,
+          "samples": 10000
+        },
+        "SVGD": {
+          "estimate": 0.29139533933747386,
+          "standard_error": 0.005366447564149767,
+          "samples": 10000
+        },
+        "ULA": {
+          "status": "skipped_after_numerical_failure",
+          "failure_iteration": 7
+        },
+        "ULD": {
+          "estimate": 0.051674717070161816,
+          "standard_error": 0.004051323702211985,
+          "samples": 10000
+        },
+        "MALA": {
+          "estimate": 196.441050778928,
+          "standard_error": 2.7246468264795642,
+          "samples": 10000
+        }
+      },
+      "restart_counts": {
+        "speed_particle_events": 0,
+        "gradient_events": 0
+      },
+      "failure_iterations": {
+        "ASVGD": null,
+        "SVGD": null,
+        "ULA": 7,
+        "ULD": null,
+        "MALA": null
+      }
+    },
+    "double_bananas": {
+      "experiment": "double_bananas",
+      "paper_scale": true,
+      "historical_metric": {
+        "ASVGD": {
+          "initial": 26.44975484239254,
+          "final": -0.7375444032958689,
+          "minimum": -0.7447730211804822,
+          "minimum_iteration": 562
+        },
+        "SVGD": {
+          "initial": 26.44975484239254,
+          "final": 0.993105438553104,
+          "minimum": 0.993105438553104,
+          "minimum_iteration": 1000
+        },
+        "ULA": {
+          "initial": 26.44975484239254,
+          "final": 0.8139550845286818,
+          "minimum": 0.7147413126920559,
+          "minimum_iteration": 420
+        },
+        "ULD": {
+          "initial": 26.44975484239254,
+          "final": -0.3145908418403818,
+          "minimum": -0.39562302810885486,
+          "minimum_iteration": 247
+        },
+        "MALA": {
+          "initial": 26.44975484239254,
+          "final": 0.7134053181807511,
+          "minimum": 0.6960956880840177,
+          "minimum_iteration": 470
+        }
+      },
+      "independent_final_kde_kl": {
+        "ASVGD": {
+          "estimate": 2.4669184786982394,
+          "standard_error": 0.04880470590716502,
+          "samples": 10000
+        },
+        "SVGD": {
+          "estimate": 1.0025415961017126,
+          "standard_error": 0.00890953937420506,
+          "samples": 10000
+        },
+        "ULA": {
+          "estimate": 0.8862673355580891,
+          "standard_error": 0.008333282490599937,
+          "samples": 10000
+        },
+        "ULD": {
+          "estimate": 1.8676416574614836,
+          "standard_error": 0.03735957845577687,
+          "samples": 10000
+        },
+        "MALA": {
+          "estimate": 0.7508391133862587,
+          "standard_error": 0.003814494395877318,
+          "samples": 10000
+        }
+      },
+      "restart_counts": {
+        "speed_particle_events": 0,
+        "gradient_events": 0
+      },
+      "failure_iterations": {
+        "ASVGD": null,
+        "SVGD": null,
+        "ULA": null,
+        "ULD": null,
+        "MALA": null
+      }
+    },
+    "anisotropic_gaussian": {
+      "experiment": "anisotropic_gaussian",
+      "paper_scale": true,
+      "historical_metric": {
+        "ASVGD": {
+          "initial": 11.740487243017451,
+          "final": 0.07569353059543366,
+          "minimum": 0.06609629704835598,
+          "minimum_iteration": 389
+        },
+        "SVGD": {
+          "initial": 11.740487243017451,
+          "final": 0.45346685896939426,
+          "minimum": 0.45346685896939426,
+          "minimum_iteration": 1000
+        },
+        "ULA": {
+          "initial": 11.740487243017451,
+          "final": 19.357837626922286,
+          "minimum": 11.740487243017451,
+          "minimum_iteration": 0
+        },
+        "ULD": {
+          "initial": 11.740487243017451,
+          "final": 0.057677149187329024,
+          "minimum": 0.031168675922875907,
+          "minimum_iteration": 616
+        },
+        "MALA": {
+          "initial": 11.740487243017451,
+          "final": 0.06217397835617061,
+          "minimum": 0.029866054982014723,
+          "minimum_iteration": 907
+        }
+      },
+      "independent_final_kde_kl": {
+        "ASVGD": {
+          "estimate": 0.03824533373630881,
+          "standard_error": 0.0018609419744808993,
+          "samples": 10000
+        },
+        "SVGD": {
+          "estimate": 0.39896962620907733,
+          "standard_error": 0.00442653542844005,
+          "samples": 10000
+        },
+        "ULA": {
+          "estimate": 2299.4898472635077,
+          "standard_error": 33.564620015101355,
+          "samples": 10000
+        },
+        "ULD": {
+          "estimate": 0.029207187147310118,
+          "standard_error": 0.002561851530973166,
+          "samples": 10000
+        },
+        "MALA": {
+          "estimate": 0.031361852159396186,
+          "standard_error": 0.002717724066300725,
+          "samples": 10000
+        }
+      },
+      "restart_counts": {
+        "speed_particle_events": 0,
+        "gradient_events": 0
+      },
+      "failure_iterations": {
+        "ASVGD": null,
+        "SVGD": null,
+        "ULA": null,
+        "ULD": null,
+        "MALA": null
+      }
+    }
+  }
+}

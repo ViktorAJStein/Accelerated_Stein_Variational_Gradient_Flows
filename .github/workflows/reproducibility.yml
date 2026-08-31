@@ -1,0 +1,58 @@
+name: Reproducibility checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.7"
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install locked environment
+        run: uv sync --frozen --python 3.12
+      - name: Verify mathematics and smoke execution
+        run: uv run --python 3.12 python verify.py
+      - name: Quick end-to-end run
+        run: >-
+          uv run --python 3.12 python run.py
+          --experiment all --quick
+          --output results/ci --quiet
+
+  full-paper-reconstruction:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.7"
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install locked environment
+        run: uv sync --frozen --python 3.12
+      - name: Run all paper-scale experiments
+        run: >-
+          uv run --python 3.12 python run.py
+          --experiment all --profile paper
+          --output results/paper --quiet
+      - name: Compare with validated summaries
+        run: >-
+          uv run --python 3.12 python check_reproduction.py
+          --results results/paper
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper-reconstruction
+          path: |
+            results/paper/**/summary.json
+            results/paper/**/*.png

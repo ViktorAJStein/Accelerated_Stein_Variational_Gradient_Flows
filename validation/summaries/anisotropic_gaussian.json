@@ -1,0 +1,74 @@
+{
+  "experiment": "anisotropic_gaussian",
+  "paper_scale": true,
+  "historical_metric": {
+    "ASVGD": {
+      "initial": 11.740487243017451,
+      "final": 0.07569353059543366,
+      "minimum": 0.06609629704835598,
+      "minimum_iteration": 389
+    },
+    "SVGD": {
+      "initial": 11.740487243017451,
+      "final": 0.45346685896939426,
+      "minimum": 0.45346685896939426,
+      "minimum_iteration": 1000
+    },
+    "ULA": {
+      "initial": 11.740487243017451,
+      "final": 19.357837626922286,
+      "minimum": 11.740487243017451,
+      "minimum_iteration": 0
+    },
+    "ULD": {
+      "initial": 11.740487243017451,
+      "final": 0.057677149187329024,
+      "minimum": 0.031168675922875907,
+      "minimum_iteration": 616
+    },
+    "MALA": {
+      "initial": 11.740487243017451,
+      "final": 0.06217397835617061,
+      "minimum": 0.029866054982014723,
+      "minimum_iteration": 907
+    }
+  },
+  "independent_final_kde_kl": {
+    "ASVGD": {
+      "estimate": 0.03824533373630881,
+      "standard_error": 0.0018609419744808993,
+      "samples": 10000
+    },
+    "SVGD": {
+      "estimate": 0.39896962620907733,
+      "standard_error": 0.00442653542844005,
+      "samples": 10000
+    },
+    "ULA": {
+      "estimate": 2299.4898472635077,
+      "standard_error": 33.564620015101355,
+      "samples": 10000
+    },
+    "ULD": {
+      "estimate": 0.029207187147310118,
+      "standard_error": 0.002561851530973166,
+      "samples": 10000
+    },
+    "MALA": {
+      "estimate": 0.031361852159396186,
+      "standard_error": 0.002717724066300725,
+      "samples": 10000
+    }
+  },
+  "restart_counts": {
+    "speed_particle_events": 0,
+    "gradient_events": 0
+  },
+  "failure_iterations": {
+    "ASVGD": null,
+    "SVGD": null,
+    "ULA": null,
+    "ULD": null,
+    "MALA": null
+  }
+}

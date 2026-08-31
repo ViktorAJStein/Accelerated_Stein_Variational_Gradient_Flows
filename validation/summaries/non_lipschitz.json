@@ -1,0 +1,73 @@
+{
+  "experiment": "non_lipschitz",
+  "paper_scale": true,
+  "historical_metric": {
+    "ASVGD": {
+      "initial": 31.135047409000933,
+      "final": 4.67820507971158,
+      "minimum": 4.676156213138297,
+      "minimum_iteration": 397
+    },
+    "SVGD": {
+      "initial": 31.135047409000933,
+      "final": 4.975494575170595,
+      "minimum": 4.975494575170595,
+      "minimum_iteration": 1000
+    },
+    "ULA": {
+      "initial": 31.135047409000933,
+      "final": 6.572523603298438,
+      "minimum": -1.5160168484640968,
+      "minimum_iteration": 5
+    },
+    "ULD": {
+      "initial": 31.135047409000933,
+      "final": 4.719867195259579,
+      "minimum": 4.68613602049295,
+      "minimum_iteration": 726
+    },
+    "MALA": {
+      "initial": 31.135047409000933,
+      "final": 20.04268218153281,
+      "minimum": 20.01966767317316,
+      "minimum_iteration": 716
+    }
+  },
+  "independent_final_kde_kl": {
+    "ASVGD": {
+      "estimate": 0.004870068101615948,
+      "standard_error": 0.000903242625494212,
+      "samples": 10000
+    },
+    "SVGD": {
+      "estimate": 0.29139533933747386,
+      "standard_error": 0.005366447564149767,
+      "samples": 10000
+    },
+    "ULA": {
+      "status": "skipped_after_numerical_failure",
+      "failure_iteration": 7
+    },
+    "ULD": {
+      "estimate": 0.051674717070161816,
+      "standard_error": 0.004051323702211985,
+      "samples": 10000
+    },
+    "MALA": {
+      "estimate": 196.441050778928,
+      "standard_error": 2.7246468264795642,
+      "samples": 10000
+    }
+  },
+  "restart_counts": {
+    "speed_particle_events": 0,
+    "gradient_events": 0
+  },
+  "failure_iterations": {
+    "ASVGD": null,
+    "SVGD": null,
+    "ULA": 7,
+    "ULD": null,
+    "MALA": null
+  }
+}

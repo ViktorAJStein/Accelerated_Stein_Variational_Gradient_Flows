@@ -1,0 +1,74 @@
+{
+  "experiment": "double_bananas",
+  "paper_scale": true,
+  "historical_metric": {
+    "ASVGD": {
+      "initial": 26.44975484239254,
+      "final": -0.7375444032958689,
+      "minimum": -0.7447730211804822,
+      "minimum_iteration": 562
+    },
+    "SVGD": {
+      "initial": 26.44975484239254,
+      "final": 0.993105438553104,
+      "minimum": 0.993105438553104,
+      "minimum_iteration": 1000
+    },
+    "ULA": {
+      "initial": 26.44975484239254,
+      "final": 0.8139550845286818,
+      "minimum": 0.7147413126920559,
+      "minimum_iteration": 420
+    },
+    "ULD": {
+      "initial": 26.44975484239254,
+      "final": -0.3145908418403818,
+      "minimum": -0.39562302810885486,
+      "minimum_iteration": 247
+    },
+    "MALA": {
+      "initial": 26.44975484239254,
+      "final": 0.7134053181807511,
+      "minimum": 0.6960956880840177,
+      "minimum_iteration": 470
+    }
+  },
+  "independent_final_kde_kl": {
+    "ASVGD": {
+      "estimate": 2.4669184786982394,
+      "standard_error": 0.04880470590716502,
+      "samples": 10000
+    },
+    "SVGD": {
+      "estimate": 1.0025415961017126,
+      "standard_error": 0.00890953937420506,
+      "samples": 10000
+    },
+    "ULA": {
+      "estimate": 0.8862673355580891,
+      "standard_error": 0.008333282490599937,
+      "samples": 10000
+    },
+    "ULD": {
+      "estimate": 1.8676416574614836,
+      "standard_error": 0.03735957845577687,
+      "samples": 10000
+    },
+    "MALA": {
+      "estimate": 0.7508391133862587,
+      "standard_error": 0.003814494395877318,
+      "samples": 10000
+    }
+  },
+  "restart_counts": {
+    "speed_particle_events": 0,
+    "gradient_events": 0
+  },
+  "failure_iterations": {
+    "ASVGD": null,
+    "SVGD": null,
+    "ULA": null,
+    "ULD": null,
+    "MALA": null
+  }
+}
