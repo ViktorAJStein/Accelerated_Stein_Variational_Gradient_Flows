@@ -4,11 +4,12 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 import random
 import time
+from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 
-'''
+r'''
     Sample code to reproduce our results
     for the Bayesian neural network example.
     Our settings are almost the same as Hernandez-Lobato and Adams (ICML15)
@@ -588,11 +589,19 @@ class asvgd_bayesnn:
         '''
         for i in range(self.M):
             w1, b1, w2, b2, loggamma, loglambda = self.unpack_weights(self.theta[i, :])
-            pred_y_test[i, :] = self.nn_predict(X_test, w1, b1, w2, b2)
-            * self.std_y_train + self.mean_y_train
-            prob[i, :] = np.sqrt(np.exp(loggamma)) / np.sqrt(2*np.pi)
-            *np.exp(-1 * (np.power(pred_y_test[i, :] - y_test, 2) / 2)
-                    * np.exp(loggamma))
+            pred_y_test[i, :] = (
+                self.nn_predict(X_test, w1, b1, w2, b2)
+                * self.std_y_train
+                + self.mean_y_train
+            )
+            prob[i, :] = (
+                np.sqrt(np.exp(loggamma)) / np.sqrt(2 * np.pi)
+                * np.exp(
+                    -0.5
+                    * np.power(pred_y_test[i, :] - y_test, 2)
+                    * np.exp(loggamma)
+                )
+            )
         pred = np.mean(pred_y_test, axis=0)
 
         # evaluation
@@ -610,9 +619,8 @@ if __name__ == '__main__':
         random.seed(1)
 
         # load dataset
-        path = 'C:\\Users\\vglom\\Documents\\TU Berlin\\SHK Steidl\\!Wuchen\\' \
-               + 'Accelerated gradient flows\\Code\\Code that works\\data\\'
-        data = np.loadtxt(f"{path}{dataset}.txt")
+        path = Path(__file__).resolve().parent / 'data'
+        data = np.loadtxt(path / f"{dataset}.txt")
         X_input = data[:, :-1]
         y_input = data[:, -1]
 

@@ -18,13 +18,24 @@ The clean runner reproduces all four paper-scale toy studies with their publishe
 Requirements: Python 3.12–3.14 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone https://github.com/ViktorAJStein/Accelerated_Stein_Variational_Gradient_Flows.git
+# A shallow HTTP/1.1 clone avoids common macOS HTTP/2 reset errors.
+git -c http.version=HTTP/1.1 clone --depth 1 \
+  https://github.com/ViktorAJStein/Accelerated_Stein_Variational_Gradient_Flows.git
 cd Accelerated_Stein_Variational_Gradient_Flows
 
 uv sync --frozen
 uv run python verify.py
 uv run python run.py --experiment all --profile paper --output results/paper
 uv run python check_reproduction.py --results results/paper
+```
+
+Only continue to `cd` and `uv` after cloning succeeds. If Git is unavailable or the connection is repeatedly interrupted, download the source archive instead:
+
+```bash
+curl -L https://github.com/ViktorAJStein/Accelerated_Stein_Variational_Gradient_Flows/archive/refs/heads/main.zip \
+  -o Accelerated_Stein_Variational_Gradient_Flows.zip
+unzip Accelerated_Stein_Variational_Gradient_Flows.zip
+cd Accelerated_Stein_Variational_Gradient_Flows-main
 ```
 
 The full command uses `N=500`, 1000 updates, and seed 42. It takes roughly 1–3 minutes on a modern laptop and writes, for each experiment:
@@ -102,16 +113,20 @@ The verification suite checks:
 
 A GitHub Actions workflow runs this verification and a quick end-to-end experiment on every push and pull request. Pushes to `main` and manually dispatched workflows also run all paper-scale experiments, check their summaries against tolerant committed baselines, and upload the regenerated plots.
 
-## Legacy research scripts
+## Repository layout
 
-The original exploratory files remain at repository root for provenance:
+```text
+gsi_reproducer/       supported implementation
+run.py                 experiment CLI
+verify.py              mathematical and smoke checks
+check_reproduction.py  paper-scale regression check
+validation/             committed numerical baselines
+reference_figures/      published comparison images
+legacy/toy/             original exploratory toy scripts
+legacy/bnn/             historical BNN script and datasets
+```
 
-- `Particle_algo_Gaussian_kernel.py`;
-- `Particle_algo_all_kernels.py`;
-- `targets.py`, `adds.py`, and `plotting.py`;
-- `bayesian_nn_ASVGD.py` and `data/`.
-
-They may execute experiments at import time, rely on historical dependencies, and contain known discretization/metric inconsistencies. Use `run.py` and `gsi_reproducer/` for the reproducible paper experiments. The pinned toy environment does not attempt to modernize the separate legacy BNN stack.
+Legacy material is isolated under [`legacy/`](legacy/README.md) for provenance. It may rely on historical dependencies or contain known discretization and metric inconsistencies. Use `run.py` and `gsi_reproducer/` for the supported toy reproduction. The pinned toy environment deliberately does not mix in the separate legacy Theano BNN stack.
 
 ## Citation
 
