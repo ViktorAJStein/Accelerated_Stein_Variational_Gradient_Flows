@@ -6,7 +6,18 @@ Reference implementation and reproducible toy experiments for:
 >
 > [Springer](https://doi.org/10.1007/978-3-032-03921-7_9) · [arXiv:2503.23462](https://arxiv.org/abs/2503.23462)
 
-## Reproduce the paper figures
+## Reproducibility by publication
+
+This repository is the canonical codebase cited by two related papers. Use the publication-specific entry point rather than the historical scripts:
+
+| Publication | Entry point | Status |
+|---|---|---|
+| GSI 2026, *Accelerated Stein Variational Gradient Flow* | [`papers/gsi2026/`](papers/gsi2026/README.md) | validated toy reconstruction |
+| arXiv:2509.04008, *Towards understanding Accelerated Stein Variational Gradient Flow* | [`papers/arxiv2509/`](papers/arxiv2509/README.md) | toy figures mapped; BNN reproduction pending |
+
+Both papers use the same 20 toy figure files byte-for-byte. Shared exact path-encoded configurations recovered from the historical archive are recorded in [`papers/shared/toy_published_runs.json`](papers/shared/toy_published_runs.json).
+
+## Reproduce the GSI toy figures
 
 The clean runner reproduces all four paper-scale toy studies with their published particle count and horizon:
 
@@ -123,7 +134,8 @@ check_reproduction.py  paper-scale regression check
 validation/             committed numerical baselines
 reference_figures/      published comparison images
 legacy/toy/             original exploratory toy scripts
-legacy/bnn/             historical BNN script and datasets
+legacy/bnn/             historical, unsupported BNN script and datasets
+papers/                  publication-specific reproduction entry points
 ```
 
 Legacy material is isolated under [`legacy/`](legacy/README.md) for provenance. It may rely on historical dependencies or contain known discretization and metric inconsistencies. Use `run.py` and `gsi_reproducer/` for the supported toy reproduction. The pinned toy environment deliberately does not mix in the separate legacy Theano BNN stack.

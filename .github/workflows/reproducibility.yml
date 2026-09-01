@@ -22,6 +22,8 @@ jobs:
         run: uv sync --frozen --python 3.12
       - name: Verify mathematics and smoke execution
         run: uv run --python 3.12 python verify.py
+      - name: Validate publication metadata
+        run: uv run --python 3.12 python -m json.tool papers/shared/toy_published_runs.json
       - name: Quick end-to-end run
         run: >-
           uv run --python 3.12 python run.py

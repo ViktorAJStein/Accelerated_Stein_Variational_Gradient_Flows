@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "source": "Many_experiments.zip historical archive",
+    "verification": "SHA-256 byte matching against published figure files",
+    "published_images_matched_in_archive": 19,
+    "published_images_total": 20,
+    "archive_unmatched_image": "KL_Gauss.png",
+    "notes": [
+      "The GSI and arXiv:2509.04008 toy image sets are byte-identical.",
+      "Path strings recover configurations but not exact executed source revisions.",
+      "Raw non-Gaussian particle and metric arrays were not retained."
+    ]
+  },
+  "runs": {
+    "gaussian_bilinear": {
+      "archive_id": "e137",
+      "target": "Gaussian",
+      "kernel": "generalized_bilinear",
+      "particles": 500,
+      "initial_mean": [1.0, 1.0],
+      "initial_covariance": [[3.0, 2.0], [2.0, 3.0]],
+      "regularization": 0.1,
+      "max_time": 10.0,
+      "updates": 1000,
+      "tau": 0.01,
+      "speed_restart": false,
+      "gradient_restart": false,
+      "damping": null,
+      "A": [[2.4, 1.6], [1.6, 2.4]],
+      "A_relation": "4 Q^{-1} for Q=[[3,-2],[-2,3]]",
+      "matched_figures": ["ASVGD_Gauss.PNG", "SVGD_Gauss.PNG"]
+    },
+    "non_lipschitz": {
+      "archive_id": "e159",
+      "target": "nonLip",
+      "kernel": "Gaussian/RBF",
+      "particles": 500,
+      "initial_mean": [5.0, 0.0],
+      "initial_covariance": [[1.0, 0.0], [0.0, 1.0]],
+      "regularization": 0.01,
+      "max_time": 100.0,
+      "updates": 1000,
+      "tau": 0.1,
+      "bandwidth": 0.1,
+      "damping": 0.5,
+      "speed_restart": true,
+      "gradient_restart": true,
+      "matched_figures": [
+        "ASVGD_nonLip.PNG",
+        "SVGD_nonLip.PNG",
+        "MALA_nonLip.PNG",
+        "ULD_nonLip.PNG",
+        "KL_nonLip.PNG"
+      ]
+    },
+    "double_bananas": {
+      "archive_id": "e194",
+      "target": "bananas",
+      "kernel": "Gaussian/RBF",
+      "particles": 500,
+      "initial_mean": [7.0, 0.0],
+      "initial_covariance": [[1.0, 0.0], [0.0, 1.0]],
+      "regularization": 0.1,
+      "max_time": 100.0,
+      "updates": 1000,
+      "tau": 0.1,
+      "bandwidth": 0.1,
+      "damping": 0.985,
+      "speed_restart": false,
+      "gradient_restart": false,
+      "matched_figures": [
+        "ASVGD_bananas.PNG",
+        "KL_bananas.PNG"
+      ],
+      "shared_baseline_figures": ["SVGD_bananas.PNG", "MALA_bananas.PNG", "ULD_bananas.PNG"]
+    },
+    "anisotropic_gaussian": {
+      "archive_id": "e114",
+      "target": "skewed_Gaussian",
+      "kernel": "Gaussian/RBF",
+      "particles": 500,
+      "initial_mean": [0.0, 0.0],
+      "initial_covariance": [[1.0, 0.0], [0.0, 1.0]],
+      "regularization": 0.1,
+      "max_time": 100.0,
+      "updates": 1000,
+      "tau": 0.1,
+      "bandwidth": 0.1,
+      "damping": 0.95,
+      "adaptive_restart": true,
+      "gradient_restart": true,
+      "matched_figures": [
+        "ASVGD_anisotropic.PNG",
+        "KL_anisotropic.PNG"
+      ],
+      "shared_baseline_figures": ["SVGD_anisotropic.PNG", "MALA_anisotropic.PNG", "ULD_anisotropic.PNG"]
+    }
+  }
+}
