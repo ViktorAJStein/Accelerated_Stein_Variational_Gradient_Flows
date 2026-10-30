@@ -612,6 +612,10 @@ class asvgd_bayesnn:
 
 
 if __name__ == '__main__':
+    # BEGIN summary-only addition
+    from bnn_summary import constructor_settings, write_summary
+    completed_results = {}
+    # END summary-only addition
     datasets = ['wine', 'concrete', 'energy', 'housing', 'kin8nm', 'naval',
                 'power', 'protein', 'yacht']
     for dataset in datasets:
@@ -669,6 +673,26 @@ if __name__ == '__main__':
         # save raw arrays
         np.save(f'results_SVGD_{dataset}.npy', results_svgd)
         np.save(f'results_ASVGD_{dataset}.npy', results_asvgd)
+
+        # BEGIN summary-only addition
+        completed_results[dataset] = {'ASVGD': results_asvgd, 'SVGD': results_svgd}
+        summary_text = write_summary(
+            completed_results, maxiters, Path.cwd() / 'bnn_summary',
+            expected_datasets=datasets,
+            settings={
+                'train_ratio': train_ratio, 'split_seed': 1,
+                'run_seeds': list(range(n_runs)),
+                'timing': 'model construction/training/development selection, excluding test evaluation',
+                'SVGD': constructor_settings(svgd_bayesnn, batch_size=batch_size,
+                                             n_hidden=n_hidden, max_iter=maxiters),
+                'ASVGD': constructor_settings(asvgd_bayesnn, batch_size=batch_size,
+                                              n_hidden=n_hidden, max_iter=maxiters),
+            })
+        if len(completed_results) == len(datasets):
+            print('\n' + summary_text)
+        else:
+            print(f'Partial cross-dataset summaries saved in bnn_summary/ ({len(completed_results)}/{len(datasets)})')
+        # END summary-only addition
 
         # compute statistics
         stats = {}
