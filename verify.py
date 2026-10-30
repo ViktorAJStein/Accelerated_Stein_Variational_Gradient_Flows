@@ -42,7 +42,7 @@ def main() -> int:
         smoke[name] = {
             method: bool(
                 np.all(np.isfinite(result.final_states[method]))
-                and np.all(np.isfinite(result.historical_metrics[method]))
+                and np.all(np.isfinite(result.metrics[method]))
             )
             for method in METHODS
         }

@@ -26,3 +26,14 @@
 The default `paper` profile chooses mathematically verified RBF dynamics, figure-verified initial orientation, a correctly normalized independent metric, historical momentum-first ordering, target-specific time-scale evidence (`0.01` internally for bilinear Gaussian; reported `0.1` for Gaussian-kernel figures), and no adaptive restarts for the non-banana examples. Disabling restarts matches the surviving function defaults and is necessary to recover the visible full-scale acceleration; the corrected literal restart condition triggers almost every iteration and suppresses acceleration. The separate `literal-paper-restarts` profile exposes that discrepancy.
 
 This gives an auditable working baseline, but it may not reproduce every raster pixel. The `legacy-public` profile is provided to expose implementation drift. Results from different profiles must not be mixed under one label.
+
+## Requested Gaussian/bilinear metric replacement
+
+The Gaussian/bilinear diagnostic now plugs each method's empirical mean and
+covariance (divisor N) into the Gaussian KL formula. This changes only measurement,
+not dynamics/configurations, and has been checked against baseline
+`dff7310bc6ecef5ca024598f815ac0f4249294de`. It is a Gaussian-fit energy, not a claim
+that all finite-particle/MALA laws are Gaussian. The other studies keep their
+existing diagnostics. Historical validation summaries and tolerances are retained;
+the regression checker can reconstruct their endpoint diagnostics from saved states.
+New Gaussian curves are reconstructed runs, not recovered historical trajectories.

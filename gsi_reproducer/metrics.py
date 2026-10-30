@@ -5,32 +5,62 @@ import math
 import numpy as np
 from scipy.stats import gaussian_kde
 
-from .targets import Target
+from .targets import GaussianTarget, Target
 
 
 FLOOR = 1e-12
 
 
+def metric_name(target: Target, kernel: str) -> str:
+    """Only the Gaussian/bilinear experiment adopts the parametric diagnostic."""
+    if kernel == "bilinear" and isinstance(target, GaussianTarget):
+        return "gaussian_moment_kl"
+    return "historical_metric"
+
+
 def gaussian_moment_kl(x: np.ndarray, target: Target) -> float:
-    if target.mean is None or target.covariance is None:
-        raise ValueError("target moments required")
+    """KL(N(mu_hat, Sigma_hat) || target), with empirical covariance divisor N.
+
+    This is a Gaussian plug-in energy, not KL of the atomic empirical measure.
+    Numerically rank-deficient fits give +inf (standard SVD machine-precision
+    rank threshold); no ridge, eigenvalue clipping or density floor is added.
+    """
+    if not isinstance(target, GaussianTarget):
+        raise ValueError("Gaussian target required, not just known moments")
+    x = np.asarray(x, dtype=float)
+    if x.ndim != 2 or min(x.shape) == 0 or not np.all(np.isfinite(x)):
+        raise ValueError("particles must be a finite nonempty (N,d) array")
+    n, dimension = x.shape
+    mean = np.asarray(target.mean, dtype=float)
+    covariance = np.asarray(target.covariance, dtype=float)
+    if (mean.shape != (dimension,) or covariance.shape != (dimension, dimension)
+            or not np.all(np.isfinite(mean)) or not np.all(np.isfinite(covariance))
+            or not np.array_equal(covariance, covariance.T)):
+        raise ValueError("target mean/covariance must be finite and dimensionally consistent")
+    cholesky = np.linalg.cholesky(covariance)  # rejects non-SPD targets
+    if n <= dimension:
+        return float("inf")
     empirical_mean = x.mean(axis=0)
-    empirical_covariance = np.cov(x, rowvar=False)
-    target_precision = np.linalg.inv(target.covariance)
-    _, logdet_empirical = np.linalg.slogdet(empirical_covariance)
-    _, logdet_target = np.linalg.slogdet(target.covariance)
-    difference = target.mean - empirical_mean
-    dimension = x.shape[1]
-    return float(
-        0.5
-        * (
-            np.trace(target_precision @ empirical_covariance)
-            - dimension
-            + logdet_target
-            - logdet_empirical
-            + difference @ target_precision @ difference
-        )
-    )
+    centered = x - empirical_mean
+    whitened = np.linalg.solve(cholesky, centered.T).T
+    # Singular values avoid squaring the condition number before resolving rank.
+    singular_values = np.linalg.svd(whitened, compute_uv=False)
+    rank_threshold = max(whitened.shape) * np.finfo(float).eps * singular_values[0]
+    if singular_values[-1] <= rank_threshold:
+        return float("inf")
+    eigenvalues = singular_values**2 / n
+    if not np.all(np.isfinite(eigenvalues)):
+        raise FloatingPointError("nonfinite fitted covariance")
+    delta = eigenvalues - 1.0
+    terms = eigenvalues - 1.0 - np.log(eigenvalues)
+    near = np.abs(delta) < 1e-4
+    z = delta[near]
+    terms[near] = z**2 * (0.5 + z * (-1/3 + z * (1/4 - z/5)))
+    difference = np.linalg.solve(cholesky, empirical_mean - mean)
+    value = float(0.5 * (terms.sum() + difference @ difference))
+    if not np.isfinite(value):
+        raise FloatingPointError("nonfinite Gaussian plug-in energy")
+    return value
 
 
 def historical_kde_score(x: np.ndarray, target: Target) -> float:

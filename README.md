@@ -51,7 +51,8 @@ cd Accelerated_Stein_Variational_Gradient_Flows-main
 
 The full command uses `N=500`, 1000 updates, and seed 42. It takes roughly 1–3 minutes on a modern laptop and writes, for each experiment:
 
-- `historical_metric.{png,pdf}` — the paper-code KDE diagnostic, including documented plotting artifacts;
+- `gaussian_moment_kl.{png,pdf}` — Gaussian plug-in energy for the Gaussian/bilinear experiment;
+- `historical_metric.{png,pdf}` — unchanged paper-code KDE diagnostic for the other experiments;
 - `trajectories.{png,pdf}` — initial and final particle states;
 - `results.npz` — metric arrays and initial/final states;
 - `summary.json` — settings, restart/failure counts, historical scores, and independent KDE-KL estimates.
@@ -104,9 +105,34 @@ Please read [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) and [`PROVENANCE.md`](PRO
 
 ## Metrics
 
-The original plots evaluate a Gaussian KDE on the same particles used to fit it. This quantity is biased, can be negative, and is not a trustworthy KL estimate. It is retained as `historical_metric` solely to compare with the paper.
+For `gaussian_bilinear` (both `A=I` and `A=Q^{-1}`), all five methods now use
+`gaussian_moment_kl`: the exact Gaussian KL formula evaluated at the particles'
+mean and covariance with divisor **N**. Outputs use the same explicit metric name
+in plots, NPZ keys and summaries; there is no KDE fit or Monte Carlo integration
+in this experiment. The energy is that of a fitted Gaussian, not of the atomic
+empirical measure or a general non-Gaussian iterate (notably MALA).
+Numerically rank-deficient fits yield infinity without adding a ridge; rank is
+resolved by SVD at the standard `max(N,d)*eps*s_max` threshold. Cholesky whitening
+and a near-unit eigenvalue series avoid unstable inverses and cancellation.
 
-`summary.json` also reports an explicitly labelled independent estimate of `KL(KDE || target)` using fresh KDE samples and correctly normalized targets. Historical and independent values should not be mixed.
+Other experiments, including the anisotropic target with an RBF kernel, retain
+`historical_metric`: the biased same-sample KDE score, which can be negative.
+Their summaries also retain the separately labelled independent `KL(KDE || target)`
+estimate. Knowing target moments alone does not make its law or iterates Gaussian.
+
+`check_reproduction.py` preserves the committed historical baselines and their
+original tolerances. For new Gaussian outputs it recomputes those legacy diagnostics
+from saved endpoints **only during this optional regression check**, alongside
+checks of the new Gaussian energies. No historical golden values were overwritten.
+
+Verify the formula, singular/invalid cases, and bitwise old/new trajectory equality:
+
+```bash
+uv run python scripts/verify_gaussian_moment_kl.py
+```
+
+Full trajectories can be retained using `--save-trajectories`, so later metric
+changes need no dynamics rerun.
 
 ## Verification
 

@@ -106,18 +106,25 @@ Each experiment directory contains:
 
 - `config.json`: complete resolved parameters;
 - `environment.json`: Python/platform/package versions;
-- `summary.json`: initial/final/minimum metrics and independent KDE-KL check;
+- `summary.json`: initial/final/minimum metrics; independent KDE-KL check only for the non-parametric experiments;
 - `results.npz`: metric arrays, initial particles, and final particles;
-- `historical_metric.png` and `.pdf`;
+- `gaussian_moment_kl.png` and `.pdf` for Gaussian/bilinear; `historical_metric.png` and `.pdf` otherwise;
 - `trajectories.png` and `.pdf`.
 
 Add `--save-trajectories` to put full checkpoint trajectories in `results.npz`; this substantially increases file size.
 
 ## Metric warning
 
-The paper code's plotted quantity fits `scipy.stats.gaussian_kde` to the particles and evaluates it on those same particles. It also floors the target density at `1e-12`. For visual fidelity, `historical_metric.*` preserves two paper-code artifacts: the non-Lipschitz offset bug (`Z` was added instead of `log Z`) and the offset-only line left by a numerically failed, zero-initialized metric array. Numerical failures are explicitly recorded in `summary.json`. The score can become negative for other targets and disappear on a logarithmic axis, so it is retained only for historical comparison.
+**Gaussian/bilinear exception:** the requested parametric replacement uses
+`KL(N(empirical mean, empirical covariance) || target)` with covariance divisor N,
+for every method and both kernel matrices. It does not assume that MALA iterates
+are Gaussian, and does not claim KL of an atomic empirical law. No KDE/MC estimator
+runs in this experiment. The anisotropic/RBF example is deliberately unchanged.
+See the README for singular-fit handling and legacy regression compatibility.
 
-`summary.json` additionally reports an independently sampled estimate of
+For the other experiments, the paper code's plotted quantity fits `scipy.stats.gaussian_kde` to the particles and evaluates it on those same particles. It also floors the target density at `1e-12`. For visual fidelity, `historical_metric.*` preserves two paper-code artifacts: the non-Lipschitz offset bug (`Z` was added instead of `log Z`) and the offset-only line left by a numerically failed, zero-initialized metric array. Numerical failures are explicitly recorded in `summary.json`. The score can become negative for other targets and disappear on a logarithmic axis, so it is retained only for historical comparison.
+
+For those other experiments, `summary.json` additionally reports an independently sampled estimate of
 
 ```text
 KL(fitted KDE || normalized target)

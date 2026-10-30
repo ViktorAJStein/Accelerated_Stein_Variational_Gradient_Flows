@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .configs import ExperimentConfig
-from .metrics import historical_kde_score
+from .metrics import gaussian_moment_kl, historical_kde_score, metric_name
 from .targets import Target
 
 
@@ -16,7 +16,8 @@ METHODS = ("ASVGD", "SVGD", "ULA", "ULD", "MALA")
 class RunResult:
     config: ExperimentConfig
     metric_iterations: np.ndarray
-    historical_metrics: dict[str, np.ndarray]
+    metric_name: str
+    metrics: dict[str, np.ndarray]
     trajectory_iterations: np.ndarray
     trajectories: dict[str, np.ndarray]
     final_states: dict[str, np.ndarray]
@@ -29,8 +30,9 @@ def rbf_kernel(x: np.ndarray, sigma: float) -> np.ndarray:
     return np.exp(-np.sum(differences**2, axis=2) / (2.0 * sigma**2))
 
 
-def _historical_metric(x: np.ndarray, target: Target, kernel: str) -> float:
-    del kernel
+def _evaluate_metric(x: np.ndarray, target: Target, kernel: str) -> float:
+    if metric_name(target, kernel) == "gaussian_moment_kl":
+        return gaussian_moment_kl(x, target)
     return historical_kde_score(x, target)
 
 
@@ -115,7 +117,8 @@ def run_experiment(
     if metric_iterations[-1] != config.steps:
         metric_iterations = np.append(metric_iterations, config.steps)
     metric_lookup = {int(k): i for i, k in enumerate(metric_iterations)}
-    historical_metrics = {
+    selected_metric = metric_name(target, config.kernel)
+    metrics = {
         method: np.full(len(metric_iterations), np.nan) for method in METHODS
     }
 
@@ -134,15 +137,16 @@ def run_experiment(
             for method in METHODS:
                 if active[method]:
                     try:
-                        historical_metrics[method][metric_index] = _historical_metric(
+                        metrics[method][metric_index] = _evaluate_metric(
                             states[method], target, config.kernel
                         )
                     except (ValueError, FloatingPointError, np.linalg.LinAlgError):
-                        historical_metrics[method][metric_index] = np.nan
-                elif target.historical_plot_offset is not None:
+                        metrics[method][metric_index] = np.nan
+                elif (selected_metric == "historical_metric"
+                      and target.historical_plot_offset is not None):
                     # Original arrays were zero-initialized. After a caught metric
                     # failure, plotting added the target offset to untouched zeros.
-                    historical_metrics[method][metric_index] = target.historical_plot_offset
+                    metrics[method][metric_index] = target.historical_plot_offset
         if iteration in trajectory_lookup:
             trajectory_index = trajectory_lookup[iteration]
             for method in METHODS:
@@ -271,7 +275,8 @@ def run_experiment(
     return RunResult(
         config=config,
         metric_iterations=metric_iterations,
-        historical_metrics=historical_metrics,
+        metric_name=selected_metric,
+        metrics=metrics,
         trajectory_iterations=trajectory_iterations,
         trajectories=trajectories,
         final_states={method: state.copy() for method, state in states.items()},

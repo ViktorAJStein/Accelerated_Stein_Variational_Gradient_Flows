@@ -33,32 +33,42 @@ def plot_metrics(
     second_bilinear_result: RunResult | None = None,
 ) -> None:
     figure, axis = plt.subplots(figsize=(9, 5.5))
+    parametric = result.metric_name == "gaussian_moment_kl"
     x = result.metric_iterations
     for method in METHODS:
-        values = result.historical_metrics[method]
-        visible = np.where(values > 0.0, values, np.nan)
+        values = result.metrics[method]
+        visible = values if parametric else np.where(values > 0.0, values, np.nan)
         label = method
         if second_bilinear_result is not None and method in ("ASVGD", "SVGD"):
             label = rf"{method}, $A=I$"
         axis.plot(x, visible, label=label, color=COLORS[method], linewidth=2)
     if second_bilinear_result is not None:
         for method, linestyle in (("ASVGD", "--"), ("SVGD", "--")):
-            values = second_bilinear_result.historical_metrics[method]
+            values = second_bilinear_result.metrics[method]
             axis.plot(
                 second_bilinear_result.metric_iterations,
-                np.where(values > 0.0, values, np.nan),
+                values if parametric else np.where(values > 0.0, values, np.nan),
                 label=rf"{method}, $A=Q^{{-1}}$",
                 color="black" if method == "ASVGD" else "gray",
                 linestyle=linestyle,
                 linewidth=2,
             )
-    axis.set_yscale("log")
+    collections = [result.metrics]
+    if second_bilinear_result is not None:
+        collections.append(second_bilinear_result.metrics)
+    has_zero = parametric and any(np.any(v == 0.0) for c in collections for v in c.values())
+    if has_zero:
+        axis.set_yscale("symlog", linthresh=1e-14)
+        axis.set_ylim(bottom=0.0)
+    else:
+        axis.set_yscale("log")
     axis.set_xlabel("Iterations")
-    axis.set_ylabel("Historical MC/KDE score")
-    axis.set_title(f"{target.name}: paper-scale reconstruction")
+    axis.set_ylabel("Gaussian plug-in KL" if parametric else "Historical MC/KDE score")
+    scale = "paper-scale" if result.config.particles == 500 and result.config.steps == 1000 else "debug"
+    axis.set_title(f"{target.name}: {scale} reconstruction")
     axis.grid(which="both", alpha=0.35)
     axis.legend()
-    hidden = sum(int(np.sum(values <= 0.0)) for values in result.historical_metrics.values())
+    hidden = 0 if parametric else sum(int(np.sum(values <= 0.0)) for values in result.metrics.values())
     if hidden:
         axis.text(
             0.01,
@@ -67,7 +77,9 @@ def plot_metrics(
             transform=axis.transAxes,
             fontsize=8,
         )
-    _save(figure, output_dir / "historical_metric")
+    if has_zero:
+        axis.text(0.01, 0.01, "Linear axis below 1e-14; no energy floor", transform=axis.transAxes, fontsize=8)
+    _save(figure, output_dir / result.metric_name)
 
 
 def _target_contours(axis: plt.Axes, target: Target) -> None:

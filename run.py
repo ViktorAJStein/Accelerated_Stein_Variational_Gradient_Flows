@@ -46,7 +46,8 @@ def save_result(
         "trajectory_iterations": result.trajectory_iterations,
     }
     for method in METHODS:
-        arrays[f"historical_{method}"] = result.historical_metrics[method]
+        prefix = "historical" if result.metric_name == "historical_metric" else result.metric_name
+        arrays[f"{prefix}_{method}"] = result.metrics[method]
         arrays[f"final_{method}"] = result.final_states[method]
         arrays[f"initial_{method}"] = result.trajectories[method][0]
         if save_trajectories:
@@ -56,22 +57,29 @@ def save_result(
     summary: dict[str, object] = {
         "experiment": result.config.name,
         "paper_scale": result.config.particles == 500 and result.config.steps == 1000,
-        "historical_metric": {},
-        "independent_final_kde_kl": {},
+        "metric_name": result.metric_name,
+        result.metric_name: {},
         "restart_counts": result.restart_counts,
         "failure_iterations": result.failure_iterations,
     }
-    historical_summary = summary["historical_metric"]
-    independent_summary = summary["independent_final_kde_kl"]
-    assert isinstance(historical_summary, dict) and isinstance(independent_summary, dict)
+    metric_summary = summary[result.metric_name]
+    independent_summary = {}
+    if result.metric_name == "historical_metric":
+        summary["independent_final_kde_kl"] = independent_summary
+    else:
+        summary["covariance_divisor"] = "N"
+        summary["interpretation"] = "KL of moment-fitted Gaussian, not atomic empirical measure"
+    assert isinstance(metric_summary, dict)
     for index, method in enumerate(METHODS):
-        metric = result.historical_metrics[method]
-        historical_summary[method] = {
+        metric = result.metrics[method]
+        metric_summary[method] = {
             "initial": float(metric[0]),
             "final": float(metric[-1]),
             "minimum": float(np.nanmin(metric)),
             "minimum_iteration": int(result.metric_iterations[np.nanargmin(metric)]),
         }
+        if result.metric_name != "historical_metric":
+            continue  # No KDE fitting or auxiliary Monte Carlo for Gaussian/bilinear.
         if result.failure_iterations[method] is None:
             estimate, standard_error = independent_kde_kl(
                 result.final_states[method],
